@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Django settings for invoicing project.
 
@@ -37,6 +38,7 @@ INSTALLED_APPS = (
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'invoicing_app',
 )
 
 MIDDLEWARE_CLASSES = (
@@ -49,6 +51,29 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django.middleware.security.SecurityMiddleware',
 )
+
+EVENTBRITE_TAX_INFORMATION = {
+    'BR': {
+        'tax_identifier_type': 'CNPJ',
+        'tax_identifier_number': '15.913.672/0001-65',
+        'supplier_name': u'EVENTIOZ GESTÃO DE EVENTOS ONLINE LTDA',
+        'supplier_address': u'Alameda Jau',
+        'supplier_address_2': u'48 - 13 andar',
+        'supplier_postal_code': u'01420-00',
+        'supplier_city': u'Jardins São Paulo',
+        'supplier_region': u'SP',
+    },
+    'AR': {
+        'tax_identifier_type': 'CUIT',
+        'tax_identifier_number': '30710388764',
+        'supplier_name': u'Eventbrite Argentina S.A.',
+        'supplier_address': u'República del Líbano 981',
+        'supplier_address_2': '',
+        'supplier_postal_code': u'5501',
+        'supplier_city': u'Godoy Cruz',
+        'supplier_region': u'Mendoza',
+    }
+}
 
 ROOT_URLCONF = 'invoicing.urls'
 
