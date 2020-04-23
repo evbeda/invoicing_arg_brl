@@ -7,6 +7,7 @@ omit =
     invoicing_app/apps.py
     invoicing_app/views.py
     invoicing_app/admin.py
+    invoicing_app/models.py
     invoicing/*
     manage.py
 
