@@ -7,55 +7,56 @@ from datetime import datetime as dt
 from mock import patch
 from models import User, PaymentOptions, Event, Order
 
+
 integration_result = (
     {
         'tax_receipt': {
-            'supplier_city': u'Godoy Cruz',
-            'supplier_address': u'Rep\xfablica del L\xedbano 981',
-            'recipient_city': u'',
-            'recipient_address_2': u'',
+            'supplier_city': 'Godoy Cruz',
+            'supplier_address': 'Rep\xfablica del L\xedbano 981',
+            'recipient_city': '',
+            'recipient_address_2': '',
             'base_amount': {
-                'currency': u'USD',
+                'currency': 'USD',
                 'value': 110
             },
             'total_taxable_amount': {
-                'currency': u'USD',
+                'currency': 'USD',
                 'value': 400
             },
-            'currency': u'USD',
+            'currency': 'USD',
             'recipient_type': 'ORGANIZER',
-            'recipient_address': u'',
+            'recipient_address': '',
             'user_id': '1',
             'event_id': '1',
             'start_date_period': '2020-03-01 00:00:00-03:54',
-            'recipient_postal_code': u'',
-            'reporting_country_code': u'AR',
-            'recipient_region': u'',
+            'recipient_postal_code': '',
+            'reporting_country_code': 'AR',
+            'recipient_region': '',
             'end_date_period': '2020-04-01 00:00:00-03:54',
             'tax_receipt_period_details': [{
                 'end_date': '2020-04-01 00:00:00-03:54',
                 'reference_type': 'ORDER',
                 'base_amount': {
-                    'currency': u'USD',
+                    'currency': 'USD',
                     'value': 110
                 },
                 'taxable_amount': {
-                    'currency': u'USD',
+                    'currency': 'USD',
                     'value': 400
                 },
                 'tax_rate': 0,
                 'start_date': '2020-03-01 00:00:00-03:54'
             }],
             'description': '',
-            'supplier_region': u'Mendoza',
-            'recipient_name': u'',
+            'supplier_region': 'Mendoza',
+            'recipient_name': '',
             'supplier_tax_information': {
                 'tax_identifier_type': 'CUIT',
-                'tax_identifier_country': u'AR',
+                'tax_identifier_country': 'AR',
                 'tax_identifier_number': '30710388764'
             },
-            'supplier_postal_code': u'5501',
-            'supplier_name': u'Eventbrite Argentina S.A.',
+            'supplier_postal_code': '5501',
+            'supplier_name': 'Eventbrite Argentina S.A.',
             'supplier_type': 'EVENTBRITE',
             'supplier_address_2': '',
             'payment_transactions_count': 1
