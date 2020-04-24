@@ -8,61 +8,7 @@ from mock import patch
 from models import User, PaymentOptions, Event, Order
 
 
-integration_result = (
-    {
-        u'tax_receipt': {
-            u'supplier_city': u'Godoy Cruz',
-            u'supplier_address': u'Rep\xfablica del L\xedbano 981',
-            u'recipient_city': u'',
-            u'recipient_address_2': u'',
-            u'base_amount': {
-                u'currency': u'USD',
-                u'value': 110
-            },
-            u'total_taxable_amount': {
-                u'currency': u'USD',
-                u'value': 400
-            },
-            u'currency': u'USD',
-            u'recipient_type': u'ORGANIZER',
-            u'recipient_address': u'',
-            u'user_id': u'1',
-            u'event_id': u'1',
-            u'start_date_period': u'2020-03-01 00:00:00-03:54',
-            u'recipient_postal_code': u'',
-            u'reporting_country_code': u'AR',
-            u'recipient_region': u'',
-            u'end_date_period': u'2020-04-01 00:00:00-03:54',
-            u'tax_receipt_period_details': [{
-                u'end_date': u'2020-04-01 00:00:00-03:54',
-                u'reference_type': u'ORDER',
-                u'base_amount': {
-                    u'currency': u'USD',
-                    u'value': 110
-                },
-                u'taxable_amount': {
-                    u'currency': u'USD',
-                    u'value': 400
-                },
-                u'tax_rate': 0,
-                u'start_date': u'2020-03-01 00:00:00-03:54'
-            }],
-            u'description': u'',
-            u'supplier_region': u'Mendoza',
-            u'recipient_name': u'',
-            u'supplier_tax_information': {
-                u'tax_identifier_type': u'CUIT',
-                u'tax_identifier_country': u'AR',
-                u'tax_identifier_number': u'30710388764'
-            },
-            u'supplier_postal_code': u'5501',
-            u'supplier_name': u'Eventbrite Argentina S.A.',
-            u'supplier_type': u'EVENTBRITE',
-            u'supplier_address_2': u'',
-            u'payment_transactions_count': 1
-        }
-    },
-)
+integration_result = ({'tax_receipt': {'supplier_city': u'Godoy Cruz', 'supplier_address': u'Rep\xfablica del L\xedbano 981', 'recipient_city': u'', 'recipient_address_2': u'', 'base_amount': {'currency': u'USD', 'value': 110}, 'total_taxable_amount': {'currency': u'USD', 'value': 400}, 'currency': u'USD', 'recipient_type': 'ORGANIZER', 'recipient_address': u'', 'user_id': '1', 'event_id': '1', 'start_date_period': '2020-03-01 00:00:00-03:54', 'recipient_postal_code': u'', 'reporting_country_code': u'AR', 'recipient_region': u'', 'end_date_period': '2020-04-01 00:00:00-03:54', 'tax_receipt_period_details': [{'end_date': '2020-04-01 00:00:00-03:54', 'reference_type': 'ORDER', 'base_amount': {'currency': u'USD', 'value': 110}, 'taxable_amount': {'currency': u'USD', 'value': 400}, 'tax_rate': 0, 'start_date': '2020-03-01 00:00:00-03:54'}], 'description': '', 'supplier_region': u'Mendoza', 'recipient_name': u'', 'supplier_tax_information': {'tax_identifier_type': 'CUIT', 'tax_identifier_country': u'AR', 'tax_identifier_number': '30710388764'}, 'supplier_postal_code': u'5501', 'supplier_name': u'Eventbrite Argentina S.A.', 'supplier_type': 'EVENTBRITE', 'supplier_address_2': '', 'payment_transactions_count': 1}},)
 
 
 class TestScriptGenerateTaxHandle(TestCase):
@@ -241,6 +187,7 @@ class TestScriptGenerateTaxHandle(TestCase):
             eb_tax=1.1,
         )
         self.my_command.handle(**self.options)
+
         self.assertEqual(
             patch_call.call_args[0],
             integration_result
