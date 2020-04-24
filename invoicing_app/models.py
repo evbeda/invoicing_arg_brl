@@ -46,7 +46,6 @@ class Order(models.Model):
         null=True,
     )
     changed = models.DateTimeField(
-        auto_now=True,
         db_index=True,
     )
     event = models.ForeignKey(
@@ -76,6 +75,7 @@ class PaymentOptions(models.Model):
 
     epp_country = models.CharField(
         max_length=50,
+        default='',
     )
     accept_eventbrite = models.BooleanField(
         default=False,
@@ -90,11 +90,38 @@ class PaymentOptions(models.Model):
         related_name='_paymentoptions',
         on_delete=models.DO_NOTHING,
     )
+    epp_name_on_account = models.CharField(
+        max_length=255,
+        default='',
+    )
+    epp_address1 = models.CharField(
+        max_length=255,
+        default='',
+    )
+    epp_address2 = models.CharField(
+        max_length=255,
+        default='',
+    )
+    epp_zip = models.CharField(
+        max_length=10,
+        default='',
+    )
+    epp_city = models.CharField(
+        max_length=150,
+        default='',
+    )
+    epp_state = models.CharField(
+        max_length=30,
+        default='',
+    )
 
 
 class Event(models.Model):
 
-    event_name = models.CharField(max_length=50)
+    event_name = models.CharField(
+        max_length=20,
+        default='',
+    )
 
     is_series_parent = models.BooleanField(
         default=False,
@@ -102,7 +129,6 @@ class Event(models.Model):
 
     user = models.ForeignKey(
         'User',
-        # DONE!
         db_column='uid',
         db_index=True,
         null=True,
@@ -115,6 +141,10 @@ class Event(models.Model):
         db_index=True,
         null=True,
         on_delete=models.DO_NOTHING,
+    )
+    currency = models.CharField(
+        default='USD',
+        max_length=3,
     )
 
 
