@@ -337,10 +337,6 @@ class Command(BaseCommand):
                 }],
             }
         }
-        print("Start date: ")
-        print(orders_kwargs['tax_receipt']['start_date_period'])
-        print("End date: ")
-        print(orders_kwargs['tax_receipt']['end_date_period'])
 
         # if payment_option.epp_tax_identifier:
         #     orders_kwargs['tax_receipt']['recipient_tax_information'] = {
@@ -348,7 +344,8 @@ class Command(BaseCommand):
         #         'tax_identifier_country': payment_option.epp_country,
         #         'tax_identifier_number': payment_option.epp_tax_identifier,
         #     }
-
         if not self.dry_run:
-            print("HERE HITS TO THE SERVICE WITH: ")
-            print(orders_kwargs)
+            self.call_service(orders_kwargs)
+
+    def call_service(self, orders_kwargs):
+        print(orders_kwargs)
