@@ -39,6 +39,7 @@ INSTALLED_APPS = (
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'invoicing_app',
+    'autofixture',
 )
 
 MIDDLEWARE_CLASSES = (
@@ -105,7 +106,7 @@ DATABASES = {
         'NAME': 'invoicing',
         'USER': 'root',
         'PASSWORD': 'root',
-        'HOST': 'localhost',
+        'HOST': '127.0.0.1',
         'PORT': 3306,
     }
 }

@@ -9,3 +9,9 @@ install:
 
 after_success:
   - coveralls
+
+services:
+  - mysql
+
+before_install:
+  - mysql -e 'CREATE DATABASE invoicing'

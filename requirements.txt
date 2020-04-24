@@ -5,10 +5,13 @@ coverage==4.5.4
 coveralls==1.11.1
 cryptography==2.9.2
 Django==1.8.19
+django-autofixture==0.12.1
+django-mysql==1.0.9
 docopt==0.6.2
 enum34==1.1.10
 idna==2.9
 ipaddress==1.0.23
+MySQL-python==1.2.5
 pycparser==2.20
 pyOpenSSL==19.1.0
 python-dateutil==2.8.1
@@ -16,5 +19,3 @@ requests==2.23.0
 six==1.14.0
 travis==0.0.3
 urllib3==1.25.9
-MySQL-python==1.2.5
-django-mysql==1.0.9
