@@ -350,5 +350,7 @@ class Command(BaseCommand):
         #     }
 
         if not self.dry_run:
-            print("HERE HITS TO THE SERVICE WITH: ")
-            print(orders_kwargs)
+            self.call_service(orders_kwargs)
+
+    def call_service(self, orders_kwargs):
+        print(orders_kwargs)
