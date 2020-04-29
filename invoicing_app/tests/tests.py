@@ -389,7 +389,6 @@ class TestIntegration(TestCase):
         my_command_new = CommandNew()
         self.my_command.handle(**self.options)
         my_command_new.handle(**self.options)
-        import ipdb; ipdb.set_trace()
         self.assertEqual(
             call_new.call_args[0][0],
             call_old.call_args[0][0]
