@@ -13,7 +13,7 @@ from invoicing import settings
 
 from invoicing_app.models import PaymentOptions, Event, Order
 
-# from memory_profiler import profile
+from memory_profiler import profile
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
@@ -96,6 +96,7 @@ class Command(BaseCommand):
 
         super(Command, self).__init__(*args, **kwargs)
 
+    @profile
     def handle(self, **options):
         if options['today_date']:
             try:
@@ -157,7 +158,7 @@ class Command(BaseCommand):
                 epp_country__in=self.declarable_tax_receipt_countries,
                 accept_eventbrite=True,
                 *optional_filter
-            ).select_related('event').iterator()
+            ).select_related('event')
             self.generate_tax_receipt_per_payment_options(payment_options)
         except Exception as e:
             raise self._log_exception(e)
@@ -353,4 +354,4 @@ class Command(BaseCommand):
             self.call_service(orders_kwargs)
 
     def call_service(self, orders_kwargs):
-        pass
+        print(orders_kwargs)

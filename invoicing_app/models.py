@@ -130,6 +130,7 @@ class Event(models.Model):
         db_table = 'Events'
 
     event_name = models.CharField(
+        db_column='name',
         max_length=20,
         default='',
     )

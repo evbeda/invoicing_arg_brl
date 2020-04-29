@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             name='Event',
             fields=[
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
-                ('event_name', models.CharField(default='', max_length=20)),
+                ('event_name', models.CharField(default='', max_length=20, db_column='name')),
                 ('is_series_parent', models.BooleanField(default=False)),
                 ('currency', models.CharField(default='USD', max_length=3)),
                 ('event_parent', models.ForeignKey(related_name='children', on_delete=django.db.models.deletion.DO_NOTHING, db_column='event_parent', to='invoicing_app.Event', null=True)),
