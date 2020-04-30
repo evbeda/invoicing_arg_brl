@@ -4,7 +4,7 @@ import logging
 from django.db.models import Sum, Count, Q
 from decimal import Decimal
 
-import pytz
+# import pytz
 
 from datetime import datetime as dt
 from dateutil.relativedelta import relativedelta
@@ -12,8 +12,8 @@ from dateutil.relativedelta import relativedelta
 from invoicing import settings
 
 from invoicing_app.models import PaymentOptions, Event, Order
-from memory_profiler import profile
-from django.db import connection
+
+from timeit import default_timer
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
@@ -86,12 +86,6 @@ class Command(BaseCommand):
             default=False,
             help='specific country to process (like AR or BR)',
         ),
-        make_option(
-            '--test',
-            dest='test',
-            default=False,
-            help='will run appending all de out dicts in a list'
-        )
     )
 
     def __init__(self, *args, **kwargs):
@@ -99,7 +93,6 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
-        self.test_set = {}
 
         super(Command, self).__init__(*args, **kwargs)
 
@@ -118,22 +111,12 @@ class Command(BaseCommand):
         self.period_start = prev_month
         self.period_end = curr_month
 
-        # localize_start_date = dt.strptime('2020-03-01', '%Y-%m-%d')
-        # localize_end_date = dt.strptime('2020-04-01', '%Y-%m-%d')
-        # 00:00:00-03:54
         localize_start_date = str(dt(2020, 03, 01, 0, 0))
         localize_end_date = str(dt(2020, 04, 01, 0, 0))
-        # localize_start_date = str(self.localice_date(
-        #     payment_option.epp_country,
-        #     self.period_start
-        # ))
-        # localize_end_date = str(self.localice_date(
-        #     payment_option.epp_country,
-        #     self.period_end
-        # ))
 
         if options['test']:
             self.test = True
+            self.start_timer = default_timer()
 
         if options['country']:
             if options['country'] not in settings.EVENTBRITE_TAX_INFORMATION:
@@ -210,22 +193,6 @@ class Command(BaseCommand):
                     localize_end_date,
                     tax_receipt_orders
                 )
-
-    # ver que hacer con los hijos
-    # def generate_tax_receipt_per_payment_options(self, payment_options):
-    #     for payment_option in payment_options:
-    #         try:
-    #             if payment_option.event.is_series_parent:
-    #                 child_events = Event.objects.filter(
-    #                     event_parent=payment_option.event.id
-    #                 ).iterator()
-    #                 for child_event in child_events:
-    #                     self.generate_tax_receipt_event(payment_option, child_event)
-    #             else:
-    #                 self.generate_tax_receipt_event(payment_option, payment_option.event)
-    #
-    #         except Exception as e:
-    #             raise self._log_exception(e)
 
     def _log_exception(self, e, event_id=None, quiet=False):
         # Don't throw all to sentry, only the important2
@@ -317,5 +284,4 @@ class Command(BaseCommand):
         self.call_service(orders_kwargs)
 
     def call_service(self, orders_kwargs):
-        if self.test:
-            self.test_set.update({orders_kwargs['tax_receipt']['event_id']: orders_kwargs})
+        pass

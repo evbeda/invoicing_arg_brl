@@ -13,7 +13,7 @@ from invoicing import settings
 
 from invoicing_app.models import PaymentOptions, Event, Order
 
-from memory_profiler import profile
+from timeit import default_timer
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
@@ -86,12 +86,6 @@ class Command(BaseCommand):
             default=False,
             help='specific country to process (like AR or BR)',
         ),
-        make_option(
-            '--test',
-            dest='test',
-            default=False,
-            help='will run appending all de out dicts in a list'
-        )
     )
 
     def __init__(self, *args, **kwargs):
@@ -99,8 +93,6 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
-        self.test_set = {}
-        # self.test_set.clear()
 
         super(Command, self).__init__(*args, **kwargs)
 
@@ -121,6 +113,7 @@ class Command(BaseCommand):
 
         if options['test']:
             self.test = True
+            self.start_timer = default_timer()
 
         if options['quiet']:
             self.logger = logging.getLogger('null')
@@ -198,35 +191,9 @@ class Command(BaseCommand):
         )
 
     def generate_tax_receipt_event(self, payment_option, event):
-        # localize_start_date = str(self.localice_date(
-        #     payment_option.epp_country,
-        #     self.period_start
-        # ))
-        # localize_end_date = str(self.localice_date(
-        #     payment_option.epp_country,
-        #     self.period_end
-        # ))
         localize_start_date = str(dt(2020, 03, 01, 0, 0))
         localize_end_date = str(dt(2020, 04, 01, 0, 0))
-        # QUERY EX
-        # SELECT *
-        # FROM `Orders`
-        # WHERE (
-        #     `Orders`.`status` = 100
-        #     AND `Orders`.`pp_date` <= 2017-07-31 20:54:00
-        #     AND `Orders`.`pp_date` >= 2017-06-30 20:54:00
-        #     AND `Orders`.`changed` >= 2017-06-30 20:54:00
-        #     AND `Orders`.`changed` <= 2017-07-31 20:54:00
-        #     AND `Orders`.`mg_fee` > 0.00
-        #     AND `Orders`.`event` = 32204109
-        # )
-        # QUERY RESULT EX (W/ AGGREGATE)
-        # tax_receipt_orders = {
-        #     'payment_transactions_count': 1,
-        #     'total_tax_amount': Decimal('1.1'),
-        #     'base_amount': Decimal('1.1'),
-        #     'total_taxable_amount_with_tax_amount': Decimal('1.1')
-        # }
+
         tax_receipt_orders = Order.objects.filter(
             status=100,
             pp_date__gte=localize_start_date,
@@ -353,17 +320,8 @@ class Command(BaseCommand):
             }
         }
 
-        # if payment_option.epp_tax_identifier:
-        #     orders_kwargs['tax_receipt']['recipient_tax_information'] = {
-        #         'tax_identifier_type': payment_option.epp_tax_identifier_type,
-        #         'tax_identifier_country': payment_option.epp_country,
-        #         'tax_identifier_number': payment_option.epp_tax_identifier,
-        #     }
-
         if not self.dry_run:
             self.call_service(orders_kwargs)
 
     def call_service(self, orders_kwargs):
-        if self.test:
-            # caca = {orders_kawargs['tax_receipt']['event_id']: orders_kwargs}
-            self.test_set.update({orders_kwargs['tax_receipt']['event_id']: orders_kwargs})
+        pass
