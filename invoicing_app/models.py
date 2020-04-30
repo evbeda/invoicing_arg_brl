@@ -36,6 +36,10 @@ STATUS_CHOICES = (
 
 class Order(models.Model):
 
+    class Meta:
+        managed = True
+        db_table = 'Orders'
+
     status = models.IntegerField(
         choices=STATUS_CHOICES,
         db_index=True,
@@ -72,6 +76,9 @@ class Order(models.Model):
 
 
 class PaymentOptions(models.Model):
+    class Meta:
+        managed = True
+        db_table = 'Payment_Options'
 
     epp_country = models.CharField(
         max_length=50,
@@ -118,7 +125,12 @@ class PaymentOptions(models.Model):
 
 class Event(models.Model):
 
+    class Meta:
+        managed = True
+        db_table = 'Events'
+
     event_name = models.CharField(
+        db_column='name',
         max_length=20,
         default='',
     )

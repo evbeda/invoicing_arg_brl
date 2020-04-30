@@ -21,4 +21,5 @@ travis==0.0.3
 urllib3==1.25.9
 mock==3.0.5
 pytz==2019.3
-ipdb==0.13.2
+memory-profiler==0.57.0
+factory-boy==2.12.0

@@ -12,8 +12,8 @@ from dateutil.relativedelta import relativedelta
 from invoicing import settings
 
 from invoicing_app.models import PaymentOptions, Event, Order
-
 from memory_profiler import profile
+from django.db import connection
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
@@ -100,7 +100,6 @@ class Command(BaseCommand):
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
         self.test_set = {}
-        # self.test_set.clear()
 
         super(Command, self).__init__(*args, **kwargs)
 
@@ -119,20 +118,22 @@ class Command(BaseCommand):
         self.period_start = prev_month
         self.period_end = curr_month
 
+        # localize_start_date = dt.strptime('2020-03-01', '%Y-%m-%d')
+        # localize_end_date = dt.strptime('2020-04-01', '%Y-%m-%d')
+        # 00:00:00-03:54
+        localize_start_date = str(dt(2020, 03, 01, 0, 0))
+        localize_end_date = str(dt(2020, 04, 01, 0, 0))
+        # localize_start_date = str(self.localice_date(
+        #     payment_option.epp_country,
+        #     self.period_start
+        # ))
+        # localize_end_date = str(self.localice_date(
+        #     payment_option.epp_country,
+        #     self.period_end
+        # ))
+
         if options['test']:
             self.test = True
-
-        if options['quiet']:
-            self.logger = logging.getLogger('null')
-
-        if options['event_id']:
-            self.event_id = options['event_id']
-
-        if options['user_id']:
-            self.user_id = options['user_id']
-
-        if options['logging']:
-            self.enable_logging()
 
         if options['country']:
             if options['country'] not in settings.EVENTBRITE_TAX_INFORMATION:
@@ -143,130 +144,91 @@ class Command(BaseCommand):
         else:
             # keys at settings.EVENTBRITE_TAX_INFORMATION are country codes
             self.declarable_tax_receipt_countries = settings.EVENTBRITE_TAX_INFORMATION.keys()
-
-        self.dry_run = options['dry_run']
-
-        self.logger.info("------Starting generate tax receipts------")
-        self.logger.info("start: %s" % self.period_start)
-        self.logger.info("end: %s" % self.period_end)
-        self.logger.info("------Generation new tax receipts------")
-        self.select_declarable_orders()
-        self.logger.info("------End Generation new tax receipts------")
-        self.logger.info("------Ending generate tax receipts------")
-
-    def select_declarable_orders(self):
-        try:
-            optional_filter = []
-            if self.event_id:
-                optional_filter.append(Q(event=self.event_id))
-
-            if self.user_id:
-                # perm [unknown] [2] Come back and flush this out
-                optional_filter.append(Q(event__user=self.user_id))
-
-            payment_options = PaymentOptions.objects.filter(
-                epp_country__in=self.declarable_tax_receipt_countries,
-                accept_eventbrite=True,
-                *optional_filter
-            ).select_related('event').iterator()
-            self.generate_tax_receipt_per_payment_options(payment_options)
-        except Exception as e:
-            raise self._log_exception(e)
-
-    def generate_tax_receipt_per_payment_options(self, payment_options):
-        for payment_option in payment_options:
-            try:
-                if payment_option.event.is_series_parent:
-                    child_events = Event.objects.filter(
-                        event_parent=payment_option.event.id
-                    ).iterator()
-                    for child_event in child_events:
-                        self.generate_tax_receipt_event(payment_option, child_event)
-                else:
-                    self.generate_tax_receipt_event(payment_option, payment_option.event)
-
-            except Exception as e:
-                raise self._log_exception(e)
-
-    def localice_date(self, country_code, date):
-        event_timezone = pytz.country_timezones(country_code)[0]
-        return dt(
-            year=date.year,
-            month=date.month,
-            day=date.day,
-            tzinfo=pytz.timezone(event_timezone)
-        )
-
-    def generate_tax_receipt_event(self, payment_option, event):
-        # localize_start_date = str(self.localice_date(
-        #     payment_option.epp_country,
-        #     self.period_start
-        # ))
-        # localize_end_date = str(self.localice_date(
-        #     payment_option.epp_country,
-        #     self.period_end
-        # ))
-        localize_start_date = str(dt(2020, 03, 01, 0, 0))
-        localize_end_date = str(dt(2020, 04, 01, 0, 0))
-        # QUERY EX
-        # SELECT *
-        # FROM `Orders`
-        # WHERE (
-        #     `Orders`.`status` = 100
-        #     AND `Orders`.`pp_date` <= 2017-07-31 20:54:00
-        #     AND `Orders`.`pp_date` >= 2017-06-30 20:54:00
-        #     AND `Orders`.`changed` >= 2017-06-30 20:54:00
-        #     AND `Orders`.`changed` <= 2017-07-31 20:54:00
-        #     AND `Orders`.`mg_fee` > 0.00
-        #     AND `Orders`.`event` = 32204109
-        # )
-        # QUERY RESULT EX (W/ AGGREGATE)
-        # tax_receipt_orders = {
-        #     'payment_transactions_count': 1,
-        #     'total_tax_amount': Decimal('1.1'),
-        #     'base_amount': Decimal('1.1'),
-        #     'total_taxable_amount_with_tax_amount': Decimal('1.1')
-        # }
-        tax_receipt_orders = Order.objects.filter(
+        # event = 1194
+        query_results = Order.objects.select_related('event', 'event___paymentoptions').filter(
             status=100,
-            pp_date__gte=localize_start_date,
-            pp_date__lte=localize_end_date,
-            changed__gte=localize_start_date,
-            changed__lte=localize_end_date,
-            event=event,
+            pp_date__gte=dt.strptime('2020-03-01', '%Y-%m-%d'),
+            pp_date__lte=dt.strptime('2020-04-01', '%Y-%m-%d'),
+            changed__gte=dt.strptime('2020-03-01', '%Y-%m-%d'),
+            changed__lte=dt.strptime('2020-04-01', '%Y-%m-%d'),
             mg_fee__gt=Decimal('0.00'),
-        ).aggregate(
+            event___paymentoptions__epp_country__in=('AR', 'BR'),
+            event___paymentoptions__accept_eventbrite=True,
+
+
+        ).values(
+            'event_id',
+            'event__user_id',
+            'event___paymentoptions__epp_country',
+            'event__currency',
+            'event___paymentoptions__epp_name_on_account',
+            'event___paymentoptions__epp_address1',
+            'event___paymentoptions__epp_address2',
+            'event___paymentoptions__epp_zip',
+            'event___paymentoptions__epp_city',
+            'event___paymentoptions__epp_state',
+        ).annotate(
             base_amount=Sum('gross'),
             total_taxable_amount_with_tax_amount=Sum('mg_fee'),
             total_tax_amount=Sum('eb_tax'),
             payment_transactions_count=Count('event'),
         )
-        if tax_receipt_orders['payment_transactions_count'] > 0:
-            # EB-28811: some eb_tax in DB has Null
-            if tax_receipt_orders['total_tax_amount'] is None:
-                tax_receipt_orders['total_tax_amount'] = Decimal('0.00')
-            self.logger.info(
-                ('Processing event: %i total_taxable_amount_with_tax_amount: %s ' +
-                 'base_amount: %s total_tax_amount: %s ' +
-                 'payment_transactions_count: %i dry_run: %s') % (
-                    event.id,
-                    str(tax_receipt_orders['total_taxable_amount_with_tax_amount']),
-                    str(tax_receipt_orders['base_amount']),
-                    str(tax_receipt_orders['total_tax_amount']),
-                    tax_receipt_orders['payment_transactions_count'],
-                    self.dry_run,
+
+        for result in query_results:
+            payment_option = {
+                'epp_country': result['event___paymentoptions__epp_country'],
+                'epp_name_on_account': result['event___paymentoptions__epp_name_on_account'],
+                'epp_address1': result['event___paymentoptions__epp_address1'],
+                'epp_address2': result['event___paymentoptions__epp_address2'],
+                'epp_zip': result['event___paymentoptions__epp_zip'],
+                'epp_city': result['event___paymentoptions__epp_city'],
+                'epp_state': result['event___paymentoptions__epp_state']
+            }
+
+            event = {
+                'id': result['event_id'],
+                'user_id': result['event__user_id'],
+                'currency': result['event__currency'],
+            }
+
+            tax_receipt_orders = {
+                'payment_transactions_count': result['payment_transactions_count'],
+                'total_tax_amount': result['total_tax_amount'],
+                'base_amount': result['base_amount'],
+                'total_taxable_amount_with_tax_amount': result['total_taxable_amount_with_tax_amount']
+            }
+
+            if result['payment_transactions_count'] > 0:
+                # EB-28811: some eb_tax in DB has Null
+                if result['total_tax_amount'] is None:
+                    result['total_tax_amount'] = Decimal('0.00')
+
+                self.generate_tax_receipts(
+                    payment_option,
+                    event,
+                    localize_start_date,
+                    localize_end_date,
+                    tax_receipt_orders
                 )
-            )
-            self.generate_tax_receipts(
-                payment_option,
-                event,
-                localize_start_date,
-                localize_end_date,
-                tax_receipt_orders
-            )
+
+    # ver que hacer con los hijos
+    # def generate_tax_receipt_per_payment_options(self, payment_options):
+    #     for payment_option in payment_options:
+    #         try:
+    #             if payment_option.event.is_series_parent:
+    #                 child_events = Event.objects.filter(
+    #                     event_parent=payment_option.event.id
+    #                 ).iterator()
+    #                 for child_event in child_events:
+    #                     self.generate_tax_receipt_event(payment_option, child_event)
+    #             else:
+    #                 self.generate_tax_receipt_event(payment_option, payment_option.event)
+    #
+    #         except Exception as e:
+    #             raise self._log_exception(e)
 
     def _log_exception(self, e, event_id=None, quiet=False):
-        # Don't throw all to sentry, only the important
+        # Don't throw all to sentry, only the important2
         message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format
         (
             event_id,
@@ -285,14 +247,14 @@ class Command(BaseCommand):
             self.logger.error(message)
 
     def generate_tax_receipts(
-        self,
-        payment_option,
-        event,
-        localize_start_date,
-        localize_end_date,
-        tax_receipt_orders
+            self,
+            payment_option,
+            event,
+            localize_start_date,
+            localize_end_date,
+            tax_receipt_orders
     ):
-        EB_TAX_INFO = settings.EVENTBRITE_TAX_INFORMATION[payment_option.epp_country]
+        EB_TAX_INFO = settings.EVENTBRITE_TAX_INFORMATION[payment_option['epp_country']]
         if not EB_TAX_INFO:
             raise Exception('Cannot find EVENTBRITE_TAX_INFORMATION in settings')
         total_taxable_amount = (
@@ -301,17 +263,17 @@ class Command(BaseCommand):
         )
         orders_kwargs = {
             'tax_receipt': {
-                'user_id': str(event.user.id),
-                'event_id': str(event.id),
-                'reporting_country_code': payment_option.epp_country,
-                'currency': event.currency,
+                'user_id': str(event['user_id']),
+                'event_id': str(event['id']),
+                'reporting_country_code': payment_option['epp_country'],
+                'currency': event['currency'],
                 'base_amount': {
                     'value': int(tax_receipt_orders['base_amount'] * 100),
-                    'currency': event.currency,
+                    'currency': event['currency'],
                 },
                 'total_taxable_amount': {
                     'value': int(total_taxable_amount * 100),
-                    'currency': event.currency,
+                    'currency': event['currency'],
                 },
                 'payment_transactions_count': tax_receipt_orders['payment_transactions_count'],
                 'start_date_period': localize_start_date,
@@ -326,16 +288,16 @@ class Command(BaseCommand):
                 'supplier_region': EB_TAX_INFO['supplier_region'],
                 'supplier_tax_information': {
                     'tax_identifier_type': EB_TAX_INFO['tax_identifier_type'],
-                    'tax_identifier_country': payment_option.epp_country,
+                    'tax_identifier_country': payment_option['epp_country'],
                     'tax_identifier_number': EB_TAX_INFO['tax_identifier_number'],
                 },
-                'recipient_name': payment_option.epp_name_on_account,
+                'recipient_name': payment_option['epp_name_on_account'],
                 'recipient_type': 'ORGANIZER',
-                'recipient_address': payment_option.epp_address1,
-                'recipient_address_2': payment_option.epp_address2,
-                'recipient_postal_code': payment_option.epp_zip,
-                'recipient_city': payment_option.epp_city,
-                'recipient_region': payment_option.epp_state,
+                'recipient_address': payment_option['epp_address1'],
+                'recipient_address_2': payment_option['epp_address2'],
+                'recipient_postal_code': payment_option['epp_zip'],
+                'recipient_city': payment_option['epp_city'],
+                'recipient_region': payment_option['epp_state'],
                 'tax_receipt_period_details': [{
                     'reference_type': 'ORDER',
                     'start_date': localize_start_date,
@@ -343,27 +305,17 @@ class Command(BaseCommand):
                     'tax_rate': 0,
                     'base_amount': {
                         'value': int(tax_receipt_orders['base_amount'] * 100),
-                        'currency': event.currency,
+                        'currency': event['currency'],
                     },
                     'taxable_amount': {
                         'value': int(total_taxable_amount * 100),
-                        'currency': event.currency,
+                        'currency': event['currency'],
                     },
                 }],
             }
         }
-
-        # if payment_option.epp_tax_identifier:
-        #     orders_kwargs['tax_receipt']['recipient_tax_information'] = {
-        #         'tax_identifier_type': payment_option.epp_tax_identifier_type,
-        #         'tax_identifier_country': payment_option.epp_country,
-        #         'tax_identifier_number': payment_option.epp_tax_identifier,
-        #     }
-
-        if not self.dry_run:
-            self.call_service(orders_kwargs)
+        self.call_service(orders_kwargs)
 
     def call_service(self, orders_kwargs):
         if self.test:
-            # caca = {orders_kawargs['tax_receipt']['event_id']: orders_kwargs}
             self.test_set.update({orders_kwargs['tax_receipt']['event_id']: orders_kwargs})
