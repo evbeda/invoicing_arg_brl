@@ -13,8 +13,6 @@ from invoicing import settings
 
 from invoicing_app.models import PaymentOptions, Event, Order
 
-# from django.db import connection
-
 from timeit import default_timer
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
