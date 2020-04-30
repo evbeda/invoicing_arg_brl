@@ -86,6 +86,12 @@ class Command(BaseCommand):
             default=False,
             help='specific country to process (like AR or BR)',
         ),
+        make_option(
+            '--test',
+            dest='test',
+            default=False,
+            help='will run appending all de out dicts in a list'
+        )
     )
 
     def __init__(self, *args, **kwargs):
@@ -93,6 +99,7 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
+        self.test_set = {}
 
         super(Command, self).__init__(*args, **kwargs)
 
@@ -124,6 +131,9 @@ class Command(BaseCommand):
         #     payment_option.epp_country,
         #     self.period_end
         # ))
+
+        if options['test']:
+            self.test = True
 
         if options['country']:
             if options['country'] not in settings.EVENTBRITE_TAX_INFORMATION:
@@ -307,4 +317,5 @@ class Command(BaseCommand):
         self.call_service(orders_kwargs)
 
     def call_service(self, orders_kwargs):
-        pass
+        if self.test:
+            self.test_set.update({orders_kwargs['tax_receipt']['event_id']: orders_kwargs})

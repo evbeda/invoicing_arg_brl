@@ -86,6 +86,12 @@ class Command(BaseCommand):
             default=False,
             help='specific country to process (like AR or BR)',
         ),
+        make_option(
+            '--test',
+            dest='test',
+            default=False,
+            help='will run appending all de out dicts in a list'
+        )
     )
 
     def __init__(self, *args, **kwargs):
@@ -93,10 +99,11 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
+        self.test_set = {}
+        # self.test_set.clear()
 
         super(Command, self).__init__(*args, **kwargs)
 
-    @profile
     def handle(self, **options):
         if options['today_date']:
             try:
@@ -111,6 +118,9 @@ class Command(BaseCommand):
         prev_month = curr_month - relativedelta(months=1)
         self.period_start = prev_month
         self.period_end = curr_month
+
+        if options['test']:
+            self.test = True
 
         if options['quiet']:
             self.logger = logging.getLogger('null')
@@ -158,7 +168,7 @@ class Command(BaseCommand):
                 epp_country__in=self.declarable_tax_receipt_countries,
                 accept_eventbrite=True,
                 *optional_filter
-            ).select_related('event')
+            ).select_related('event').iterator()
             self.generate_tax_receipt_per_payment_options(payment_options)
         except Exception as e:
             raise self._log_exception(e)
@@ -354,4 +364,6 @@ class Command(BaseCommand):
             self.call_service(orders_kwargs)
 
     def call_service(self, orders_kwargs):
-        print(orders_kwargs)
+        if self.test:
+            # caca = {orders_kawargs['tax_receipt']['event_id']: orders_kwargs}
+            self.test_set.update({orders_kwargs['tax_receipt']['event_id']: orders_kwargs})

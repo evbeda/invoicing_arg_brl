@@ -17,9 +17,6 @@ from factories.event import EventFactory
 from factories.paymentoptions import PaymentOptionsFactory
 from factories.order import OrderFactory
 
-expected_result_1 = call({'tax_receipt': {'supplier_city': u'Godoy Cruz', 'supplier_address': u'Rep\xfablica del L\xedbano 981', 'recipient_city': u'', 'recipient_address_2': u'', 'base_amount': {'currency': u'USD', 'value': 110}, 'total_taxable_amount': {'currency': u'USD', 'value': 400}, 'currency': u'USD', 'recipient_type': 'ORGANIZER', 'recipient_address': u'', 'user_id': '1', 'event_id': '1', 'start_date_period': '2020-03-01 00:00:00-03:54', 'recipient_postal_code': u'', 'reporting_country_code': u'AR', 'recipient_region': u'', 'end_date_period': '2020-04-01 00:00:00-03:54', 'tax_receipt_period_details': [{'end_date': '2020-04-01 00:00:00-03:54', 'reference_type': 'ORDER', 'base_amount': {'currency': u'USD', 'value': 110}, 'taxable_amount': {'currency': u'USD', 'value': 400}, 'tax_rate': 0, 'start_date': '2020-03-01 00:00:00-03:54'}], 'description': '', 'supplier_region': u'Mendoza', 'recipient_name': u'', 'supplier_tax_information': {'tax_identifier_type': 'CUIT', 'tax_identifier_country': u'AR', 'tax_identifier_number': '30710388764'}, 'supplier_postal_code': u'5501', 'supplier_name': u'Eventbrite Argentina S.A.', 'supplier_type': 'EVENTBRITE', 'supplier_address_2': '', 'payment_transactions_count': 1}})
-expected_result_2 = call({'tax_receipt': {'supplier_city': u'Godoy Cruz', 'supplier_address': u'Rep\xfablica del L\xedbano 981', 'recipient_city': u'', 'recipient_address_2': u'', 'base_amount': {'currency': u'USD', 'value': 110}, 'total_taxable_amount': {'currency': u'USD', 'value': 400}, 'currency': u'USD', 'recipient_type': 'ORGANIZER', 'recipient_address': u'', 'user_id': '2', 'event_id': '2', 'start_date_period': '2020-03-01 00:00:00-03:54', 'recipient_postal_code': u'', 'reporting_country_code': u'AR', 'recipient_region': u'', 'end_date_period': '2020-04-01 00:00:00-03:54', 'tax_receipt_period_details': [{'end_date': '2020-04-01 00:00:00-03:54', 'reference_type': 'ORDER', 'base_amount': {'currency': u'USD', 'value': 110}, 'taxable_amount': {'currency': u'USD', 'value': 400}, 'tax_rate': 0, 'start_date': '2020-03-01 00:00:00-03:54'}], 'description': '', 'supplier_region': u'Mendoza', 'recipient_name': u'', 'supplier_tax_information': {'tax_identifier_type': 'CUIT', 'tax_identifier_country': u'AR', 'tax_identifier_number': '30710388764'}, 'supplier_postal_code': u'5501', 'supplier_name': u'Eventbrite Argentina S.A.', 'supplier_type': 'EVENTBRITE', 'supplier_address_2': '', 'payment_transactions_count': 1}})
-
 
 class TestScriptGenerateTaxHandle(TestCase):
     def setUp(self):
@@ -35,7 +32,8 @@ class TestScriptGenerateTaxHandle(TestCase):
             'today_date': '2020-04-08',
             'no_color': False,
             'country': 'AR',
-            'logging': False
+            'logging': False,
+            'test': False,
         }
         self.my_command = CommandOld()
 
@@ -66,7 +64,8 @@ class TestScriptGenerateTaxHandle(TestCase):
             'today_date': '2020-04-08',
             'country': None,
             'no_color': False,
-            'logging': False
+            'logging': False,
+            'test': False,
         }
         self.my_command.handle(**options)
         self.assertEqual(
@@ -185,7 +184,8 @@ class TestIntegration(TestCase):
             'today_date': '2020-04-08',
             'no_color': False,
             'country': 'AR',
-            'logging': False
+            'logging': False,
+            'test': False,
         }
         self.my_command = CommandOld()
         self.my_user = UserFactory.build(username='user_1')
@@ -393,3 +393,37 @@ class TestIntegration(TestCase):
             call_new.call_args[0][0],
             call_old.call_args[0][0]
         )
+
+
+# class TestIntegrationDemo(TestCase):
+
+#     def test_integration(self):
+#         self.options = {
+#             'user_id': None,
+#             'dry_run': False,
+#             'settings': None,
+#             'event_id': None,
+#             'pythonpath': None,
+#             'verbosity': 1,
+#             'traceback': False,
+#             'quiet': False,
+#             'today_date': '2020-04-08',
+#             'no_color': False,
+#             'country': 'AR',
+#             'logging': False,
+#             'test': True
+#         }
+#         my_command_old = CommandOld()
+#         my_command_new = CommandNew()
+#         my_command_old.handle(**self.options)
+#         my_command_new.handle(**self.options)
+
+#         self.assertEqual(
+#             len(my_command_old.test_set),
+#             len(my_command_new.test_set)
+#         )
+
+#         self.assertEqual(
+#             my_command_old.test_set,
+#             my_command_new.test_set
+#         )
