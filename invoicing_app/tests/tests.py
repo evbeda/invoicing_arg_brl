@@ -7,7 +7,6 @@ from invoicing_app.models import User, PaymentOptions, Event, Order
 from datetime import datetime as dt
 
 from mock import patch
-from mock import call
 
 from invoicing_app.management.commands.generate_tax_receipts_old import Command as CommandOld
 from invoicing_app.management.commands.generate_tax_receipts_new import Command as CommandNew
@@ -393,37 +392,3 @@ class TestIntegration(TestCase):
             call_new.call_args[0][0],
             call_old.call_args[0][0]
         )
-
-
-# class TestIntegrationDemo(TestCase):
-
-#     def test_integration(self):
-#         self.options = {
-#             'user_id': None,
-#             'dry_run': False,
-#             'settings': None,
-#             'event_id': None,
-#             'pythonpath': None,
-#             'verbosity': 1,
-#             'traceback': False,
-#             'quiet': False,
-#             'today_date': '2020-04-08',
-#             'no_color': False,
-#             'country': 'AR',
-#             'logging': False,
-#             'test': True
-#         }
-#         my_command_old = CommandOld()
-#         my_command_new = CommandNew()
-#         my_command_old.handle(**self.options)
-#         my_command_new.handle(**self.options)
-
-#         self.assertEqual(
-#             len(my_command_old.test_set),
-#             len(my_command_new.test_set)
-#         )
-
-#         self.assertEqual(
-#             my_command_old.test_set,
-#             my_command_new.test_set
-#         )
