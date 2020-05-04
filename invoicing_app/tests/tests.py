@@ -3,7 +3,6 @@ from __future__ import unicode_literals
 
 from django.test import TestCase
 
-from invoicing_app.models import User, PaymentOptions, Event, Order
 from datetime import datetime as dt
 
 from mock import patch
@@ -17,7 +16,8 @@ from factories.paymentoptions import PaymentOptionsFactory
 from factories.order import OrderFactory
 
 
-class TestScriptGenerateTaxHandle(TestCase):
+# Unittest for the old script
+class TestScriptGenerateTaxReceiptsOld(TestCase):
     def setUp(self):
         self.options = {
             'user_id': None,
@@ -32,21 +32,29 @@ class TestScriptGenerateTaxHandle(TestCase):
             'no_color': False,
             'country': 'AR',
             'logging': False,
-            'test': False,
         }
         self.my_command = CommandOld()
+        self.my_command_new = CommandNew()
 
     def test_handle_periods(self):
         self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
         start = dt(2020, 03, 01, 00, 00, 00)
         end = dt(2020, 04, 01, 00, 00, 00)
         self.assertEqual(self.my_command.period_start, start)
         self.assertEqual(self.my_command.period_end, end)
+        self.assertEqual(self.my_command_new.period_start, start)
+        self.assertEqual(self.my_command_new.period_end, end)
 
     def test_handle_countries(self):
         self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
         self.assertEqual(
             self.my_command.declarable_tax_receipt_countries,
+            ['AR']
+        )
+        self.assertEqual(
+            self.my_command_new.declarable_tax_receipt_countries,
             ['AR']
         )
 
@@ -67,8 +75,13 @@ class TestScriptGenerateTaxHandle(TestCase):
             'test': False,
         }
         self.my_command.handle(**options)
+        self.my_command_new.handle(**options)
         self.assertEqual(
             self.my_command.declarable_tax_receipt_countries,
+            ['AR', 'BR']
+        )
+        self.assertEqual(
+            self.my_command_new.declarable_tax_receipt_countries,
             ['AR', 'BR']
         )
 
@@ -83,20 +96,18 @@ class TestScriptGenerateTaxHandle(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.generate_tax_receipt_event'
     )
     def test_generate_tax_receipt_per_payment_options(self, patch_generate):
-        my_user = User.objects.create(
-            username='user_a',
+        my_user = UserFactory.build(
+            username='user_a'
         )
-        my_event = Event.objects.create(
-            event_name='event1',
-            is_series_parent=False,
-            user=my_user,
-            event_parent=None,
+        my_user.save()
+        my_event = EventFactory.build(
+            user=my_user
         )
-        my_pay_opt = PaymentOptions.objects.create(
-            epp_country='AR',
-            accept_eventbrite=False,
-            event=my_event,
+        my_event.save()
+        my_pay_opt = PaymentOptionsFactory.build(
+            event=my_event
         )
+        my_pay_opt.save()
         self.my_command.generate_tax_receipt_per_payment_options([my_pay_opt])
         self.assertEqual(
             str(type(patch_generate.call_args[0][0])),
@@ -111,29 +122,23 @@ class TestScriptGenerateTaxHandle(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.generate_tax_receipts'
     )
     def test_generate_tax_receipt_event(self, patch_generate):
-        my_user = User.objects.create(
-            username='user_a',
+        my_user = UserFactory.build(username='user_1')
+        my_user.save()
+
+        my_event = EventFactory.build(
+            user=my_user
         )
-        my_event = Event.objects.create(
-            event_name='event1',
-            is_series_parent=False,
-            user=my_user,
-            event_parent=None,
-        )
-        my_pay_opt = PaymentOptions.objects.create(
-            epp_country='AR',
-            accept_eventbrite=False,
+        my_event.save()
+
+        my_pay_opt = PaymentOptionsFactory.build(
             event=my_event,
         )
-        my_order = Order.objects.create(
-            status=100,
-            pp_date=str(dt(2020, 3, 8, 0, 0)),
-            changed=str(dt(2020, 3, 10, 0, 0)),
+        my_pay_opt.save()
+
+        my_order = OrderFactory.build(
             event=my_event,
-            mg_fee=5.1,
-            gross=1.1,
-            eb_tax=1.1,
         )
+        my_order.save()
         self.my_command.dry_run = False
         self.my_command.period_start = dt(2020, 3, 1, 0, 0)
         self.my_command.period_end = dt(2020, 4, 1, 0, 0)
@@ -149,27 +154,27 @@ class TestScriptGenerateTaxHandle(TestCase):
         )
         self.assertEqual(
             str(type(patch_generate.call_args[0][2])),
-            "<type 'str'>"
+            "<type 'datetime.datetime'>"
         )
         self.assertEqual(
             str(type(patch_generate.call_args[0][3])),
-            "<type 'str'>"
+            "<type 'datetime.datetime'>"
         )
         self.assertEqual(
             str(type(patch_generate.call_args[0][4])),
             "<type 'dict'>"
         )
 
-    def test_localice_date(self):
+    def test_localize_date_old(self):
         my_date = dt(2020, 4, 11, 0, 0)
         self.assertEqual(
-            str(self.my_command.localice_date('AR', my_date)),
+            str(self.my_command.localize_date('AR', my_date)),
             "2020-04-11 00:00:00-03:54"
         )
 
 
+# Integration for the booth script
 class TestIntegration(TestCase):
-
     def setUp(self):
         self.options = {
             'user_id': None,
@@ -187,6 +192,7 @@ class TestIntegration(TestCase):
             'test': False,
         }
         self.my_command = CommandOld()
+        self.my_command_new = CommandNew()
         self.my_user = UserFactory.build(username='user_1')
         self.my_user.save()
 
@@ -206,19 +212,32 @@ class TestIntegration(TestCase):
         self.my_order.save()
 
     @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service'
+    )
+    @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service'
     )
-    def test_generate_tax_receipts(self, patch_call):
+    def test_generate_tax_receipts(self, patch_call, patch_call_new):
         self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
+        # Expected is 400 because mg_fee is 5.1 and eb_tax = 1.1
+        expected_tot_tax_amount = 400
         self.assertEqual(
             patch_call.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
-            400
+            expected_tot_tax_amount
+        )
+        self.assertEqual(
+            patch_call_new.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
+            expected_tot_tax_amount
         )
 
     @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service'
+    )
+    @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
     )
-    def test_generate_tax_receipts_w_1_po_CL(self, patch_call):
+    def test_generate_tax_receipts_w_1_po_CL(self, patch_call, patch_call_new):
         my_user_2 = UserFactory.build(
             username='user_2'
         )
@@ -235,7 +254,7 @@ class TestIntegration(TestCase):
         )
         my_pay_opt_2.save()
 
-        # Set the mg_fsee in 11.0 to see that the element that goes to the service isn't this
+        # Set the mg_fee in 11.0 to see that the element that goes to the service isn't this
         my_order_2 = OrderFactory.build(
             event=my_event_2,
             mg_fee=11.0
@@ -243,19 +262,36 @@ class TestIntegration(TestCase):
         my_order_2.save()
 
         self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
+
+        # Expected is 400 because mg_fee is 5.1 and eb_tax = 1.1
+        expected_tot_tax_amount = 400
+        call_once = 1
+
         self.assertEqual(
             patch_call.call_count,
-            1
+            call_once
+        )
+        self.assertEqual(
+            patch_call_new.call_count,
+            call_once
         )
         self.assertEqual(
             patch_call.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
-            400
+            expected_tot_tax_amount
+        )
+        self.assertEqual(
+            patch_call_new.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
+            expected_tot_tax_amount
         )
 
     @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    )
+    @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
     )
-    def test_generate_tax_receipts_w_o_oudate(self, patch_call):
+    def test_generate_tax_receipts_w_o_oudate(self, patch_call, patch_call_new):
         my_user_3 = UserFactory.build(
             username='user_2'
         )
@@ -280,19 +316,36 @@ class TestIntegration(TestCase):
         my_order_3.save()
 
         self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
+
+        # Expected is 400 because mg_fee is 5.1 and eb_tax = 1.1
+        expected_tot_tax_amount = 400
+        call_once = 1
+
         self.assertEqual(
             patch_call.call_count,
-            1
+            call_once
+        )
+        self.assertEqual(
+            patch_call_new.call_count,
+            call_once
         )
         self.assertEqual(
             patch_call.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
-            400
+            expected_tot_tax_amount
+        )
+        self.assertEqual(
+            patch_call_new.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
+            expected_tot_tax_amount
         )
 
     @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    )
+    @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
     )
-    def test_generate_tax_receipts_w_2_calls(self, patch_call):
+    def test_generate_tax_receipts_w_2_calls(self, patch_call, patch_call_new):
         my_user_4 = UserFactory.build(
             username='user_2'
         )
@@ -316,15 +369,30 @@ class TestIntegration(TestCase):
         my_order_4.save()
 
         self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
+
+        # Expected is 400 because mg_fee is 11.0 and eb_tax = 1.1
+        expected_tot_tax_amount = 990
+        call_twice = 2
+
         self.assertEqual(
             patch_call.call_count,
-            2
+            call_twice
+        )
+        self.assertEqual(
+            patch_call_new.call_count,
+            call_twice
         )
         self.assertEqual(
             patch_call.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
-            990
+            expected_tot_tax_amount
+        )
+        self.assertEqual(
+            patch_call_new.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
+            expected_tot_tax_amount
         )
 
+    # Only for the old script
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
     )
@@ -372,10 +440,13 @@ class TestIntegration(TestCase):
         )
         my_order_6.save()
 
+        call_twice = 2
+
         self.my_command.handle(**self.options)
+
         self.assertEqual(
             patch_call.call_count,
-            2
+            call_twice
         )
 
     @patch(

@@ -13,8 +13,6 @@ from invoicing import settings
 
 from invoicing_app.models import PaymentOptions, Event, Order
 
-from timeit import default_timer
-
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
 
@@ -111,10 +109,6 @@ class Command(BaseCommand):
         self.period_start = prev_month
         self.period_end = curr_month
 
-        if options['test']:
-            self.test = True
-            self.start_timer = default_timer()
-
         if options['quiet']:
             self.logger = logging.getLogger('null')
 
@@ -181,7 +175,7 @@ class Command(BaseCommand):
             except Exception as e:
                 raise self._log_exception(e)
 
-    def localice_date(self, country_code, date):
+    def localize_date(self, country_code, date):
         event_timezone = pytz.country_timezones(country_code)[0]
         return dt(
             year=date.year,
@@ -191,8 +185,14 @@ class Command(BaseCommand):
         )
 
     def generate_tax_receipt_event(self, payment_option, event):
-        localize_start_date = str(dt(2020, 03, 01, 0, 0))
-        localize_end_date = str(dt(2020, 04, 01, 0, 0))
+        localize_start_date = self.localize_date(
+            payment_option.epp_country,
+            self.period_start
+        )
+        localize_end_date = self.localize_date(
+            payment_option.epp_country,
+            self.period_end
+        )
 
         tax_receipt_orders = Order.objects.filter(
             status=100,
