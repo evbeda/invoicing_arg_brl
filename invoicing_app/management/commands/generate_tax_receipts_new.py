@@ -94,7 +94,7 @@ class Command(BaseCommand):
 
         super(Command, self).__init__(*args, **kwargs)
 
-    def localice_date(self, country_code, date):
+    def localize_date(self, country_code, date):
         event_timezone = pytz.country_timezones(country_code)[0]
         return dt(
             year=date.year,
@@ -134,11 +134,11 @@ class Command(BaseCommand):
         self.logger.info("end: {}".format(self.period_end))
 
         # If the country is not specified, 'AR' will be set
-        localize_start_date = self.localice_date(
+        localize_start_date = self.localize_date(
             self.declarable_tax_receipt_countries[0],
             self.period_start
         )
-        localize_end_date = self.localice_date(
+        localize_end_date = self.localize_date(
             self.declarable_tax_receipt_countries[0],
             self.period_end
         )

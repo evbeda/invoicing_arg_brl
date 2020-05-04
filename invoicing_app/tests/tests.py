@@ -165,10 +165,10 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
             "<type 'dict'>"
         )
 
-    def test_localice_date_old(self):
+    def test_localize_date_old(self):
         my_date = dt(2020, 4, 11, 0, 0)
         self.assertEqual(
-            str(self.my_command.localice_date('AR', my_date)),
+            str(self.my_command.localize_date('AR', my_date)),
             "2020-04-11 00:00:00-03:54"
         )
 
