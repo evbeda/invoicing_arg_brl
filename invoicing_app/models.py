@@ -132,7 +132,10 @@ class PaymentOptions(models.Model):
     )
 
 
-class Event(models.Model):
+class Event(
+    models.Model,
+    SeriesEventModelMixin
+):
 
     class Meta:
         managed = True
