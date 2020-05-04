@@ -33,6 +33,15 @@ STATUS_CHOICES = (
     (ORDER_DELETED, 'Deleted'),
 )
 
+class SeriesEventModelMixin(object):
+
+    @property
+    def is_series(self):
+        return bool(self.series and not self.is_repeating)
+
+    @property
+    def is_series_parent(self):
+        return self.is_series and self.event_parent_id is None
 
 class Order(models.Model):
 
@@ -135,7 +144,7 @@ class Event(models.Model):
         default='',
     )
 
-    is_series_parent = models.BooleanField(
+    series = models.NullBooleanField(
         default=False,
     )
 
@@ -158,7 +167,16 @@ class Event(models.Model):
         default='USD',
         max_length=3,
     )
+    repeat_schedule = models.NullCharField(
+        max_length=40,
+    )
+
+    @property
+    def is_repeating(self):
+        return self.repeat_schedule != ''
 
 
 class User(models.Model):
     username = models.CharField(max_length=50)
+    ##Faltaria el meta, cuando probemos en QA adaptarlo segun nombre.
+
