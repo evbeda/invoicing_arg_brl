@@ -17,7 +17,8 @@ from factories.paymentoptions import PaymentOptionsFactory
 from factories.order import OrderFactory
 
 
-class TestScriptGenerateTaxHandle(TestCase):
+# Unittest for the old script
+class TestScriptGenerateTaxReceiptsOld(TestCase):
     def setUp(self):
         self.options = {
             'user_id': None,
@@ -32,7 +33,6 @@ class TestScriptGenerateTaxHandle(TestCase):
             'no_color': False,
             'country': 'AR',
             'logging': False,
-            'test': False,
         }
         self.my_command = CommandOld()
 
@@ -83,20 +83,18 @@ class TestScriptGenerateTaxHandle(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.generate_tax_receipt_event'
     )
     def test_generate_tax_receipt_per_payment_options(self, patch_generate):
-        my_user = User.objects.create(
-            username='user_a',
+        my_user = UserFactory.build(
+            username='user_a'
         )
-        my_event = Event.objects.create(
-            event_name='event1',
-            is_series_parent=False,
-            user=my_user,
-            event_parent=None,
+        my_user.save()
+        my_event = EventFactory.build(
+            user=my_user
         )
-        my_pay_opt = PaymentOptions.objects.create(
-            epp_country='AR',
-            accept_eventbrite=False,
-            event=my_event,
+        my_event.save()
+        my_pay_opt = PaymentOptionsFactory.build(
+            event=my_event
         )
+        my_pay_opt.save()
         self.my_command.generate_tax_receipt_per_payment_options([my_pay_opt])
         self.assertEqual(
             str(type(patch_generate.call_args[0][0])),
@@ -111,29 +109,23 @@ class TestScriptGenerateTaxHandle(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.generate_tax_receipts'
     )
     def test_generate_tax_receipt_event(self, patch_generate):
-        my_user = User.objects.create(
-            username='user_a',
+        my_user = UserFactory.build(username='user_1')
+        my_user.save()
+
+        my_event = EventFactory.build(
+            user=my_user
         )
-        my_event = Event.objects.create(
-            event_name='event1',
-            is_series_parent=False,
-            user=my_user,
-            event_parent=None,
-        )
-        my_pay_opt = PaymentOptions.objects.create(
-            epp_country='AR',
-            accept_eventbrite=False,
+        my_event.save()
+
+        my_pay_opt = PaymentOptionsFactory.build(
             event=my_event,
         )
-        my_order = Order.objects.create(
-            status=100,
-            pp_date=str(dt(2020, 3, 8, 0, 0)),
-            changed=str(dt(2020, 3, 10, 0, 0)),
+        my_pay_opt.save()
+
+        my_order = OrderFactory.build(
             event=my_event,
-            mg_fee=5.1,
-            gross=1.1,
-            eb_tax=1.1,
         )
+        my_order.save()
         self.my_command.dry_run = False
         self.my_command.period_start = dt(2020, 3, 1, 0, 0)
         self.my_command.period_end = dt(2020, 4, 1, 0, 0)
@@ -149,11 +141,11 @@ class TestScriptGenerateTaxHandle(TestCase):
         )
         self.assertEqual(
             str(type(patch_generate.call_args[0][2])),
-            "<type 'str'>"
+            "<type 'datetime.datetime'>"
         )
         self.assertEqual(
             str(type(patch_generate.call_args[0][3])),
-            "<type 'str'>"
+            "<type 'datetime.datetime'>"
         )
         self.assertEqual(
             str(type(patch_generate.call_args[0][4])),
@@ -168,8 +160,8 @@ class TestScriptGenerateTaxHandle(TestCase):
         )
 
 
+# Integration for the old script (las test is for booth scripts)
 class TestIntegration(TestCase):
-
     def setUp(self):
         self.options = {
             'user_id': None,
@@ -388,6 +380,7 @@ class TestIntegration(TestCase):
         my_command_new = CommandNew()
         self.my_command.handle(**self.options)
         my_command_new.handle(**self.options)
+        # import ipdb; ipdb.set_trace()
         self.assertEqual(
             call_new.call_args[0][0],
             call_old.call_args[0][0]

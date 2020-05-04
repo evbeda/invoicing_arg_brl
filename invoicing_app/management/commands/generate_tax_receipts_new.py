@@ -1,10 +1,10 @@
 from django.core.management.base import BaseCommand, CommandError
 from optparse import make_option
 import logging
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count
 from decimal import Decimal
 
-# import pytz
+import pytz
 
 from datetime import datetime as dt
 from dateutil.relativedelta import relativedelta
@@ -12,8 +12,6 @@ from dateutil.relativedelta import relativedelta
 from invoicing import settings
 
 from invoicing_app.models import PaymentOptions, Event, Order
-
-from timeit import default_timer
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
@@ -96,6 +94,15 @@ class Command(BaseCommand):
 
         super(Command, self).__init__(*args, **kwargs)
 
+    def localice_date(self, country_code, date):
+        event_timezone = pytz.country_timezones(country_code)[0]
+        return dt(
+            year=date.year,
+            month=date.month,
+            day=date.day,
+            tzinfo=pytz.timezone(event_timezone)
+        )
+
     def handle(self, **options):
         if options['today_date']:
             try:
@@ -111,13 +118,6 @@ class Command(BaseCommand):
         self.period_start = prev_month
         self.period_end = curr_month
 
-        localize_start_date = str(dt(2020, 03, 01, 0, 0))
-        localize_end_date = str(dt(2020, 04, 01, 0, 0))
-
-        if options['test']:
-            self.test = True
-            self.start_timer = default_timer()
-
         if options['country']:
             if options['country'] not in settings.EVENTBRITE_TAX_INFORMATION:
                 raise CommandError(
@@ -125,20 +125,33 @@ class Command(BaseCommand):
                 )
             self.declarable_tax_receipt_countries = [options['country']]
         else:
-            # keys at settings.EVENTBRITE_TAX_INFORMATION are country codes
             self.declarable_tax_receipt_countries = settings.EVENTBRITE_TAX_INFORMATION.keys()
-        # event = 1194
+
+        self.dry_run = options['dry_run']
+
+        self.logger.info("------Starting generate tax receipts------")
+        self.logger.info("start: {}".format(self.period_start))
+        self.logger.info("end: {}".format(self.period_end))
+
+        # If the country is not specified, 'AR' will be set
+        localize_start_date = self.localice_date(
+            self.declarable_tax_receipt_countries[0],
+            self.period_start
+        )
+        localize_end_date = self.localice_date(
+            self.declarable_tax_receipt_countries[0],
+            self.period_end
+        )
+
         query_results = Order.objects.select_related('event', 'event___paymentoptions').filter(
             status=100,
-            pp_date__gte=dt.strptime('2020-03-01', '%Y-%m-%d'),
-            pp_date__lte=dt.strptime('2020-04-01', '%Y-%m-%d'),
-            changed__gte=dt.strptime('2020-03-01', '%Y-%m-%d'),
-            changed__lte=dt.strptime('2020-04-01', '%Y-%m-%d'),
+            pp_date__gte=localize_start_date,
+            pp_date__lte=localize_end_date,
+            changed__gte=localize_start_date,
+            changed__lte=localize_end_date,
             mg_fee__gt=Decimal('0.00'),
-            event___paymentoptions__epp_country__in=('AR', 'BR'),
+            event___paymentoptions__epp_country__in=self.declarable_tax_receipt_countries,
             event___paymentoptions__accept_eventbrite=True,
-
-
         ).values(
             'event_id',
             'event__user_id',
@@ -194,8 +207,10 @@ class Command(BaseCommand):
                     tax_receipt_orders
                 )
 
+        self.logger.info("------End Generation new tax receipts------")
+        self.logger.info("------Ending generate tax receipts------")
+
     def _log_exception(self, e, event_id=None, quiet=False):
-        # Don't throw all to sentry, only the important2
         message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format
         (
             event_id,
