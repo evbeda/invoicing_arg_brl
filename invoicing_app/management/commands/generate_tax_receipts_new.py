@@ -98,6 +98,7 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
+        self.parent_payment_options = {}
 
         super(Command, self).__init__(*args, **kwargs)
 
@@ -190,7 +191,6 @@ class Command(BaseCommand):
         for result in query_results:
             if result['event__event_parent']:
                 if options['use_po_dict']:
-                    self.parent_payment_options = {}
                     parent_payment_options = self.get_parent_payment_options_dict(result['event__event_parent'])
                 else:
                     parent_payment_options = self.search_parent_payment_options(result['event__event_parent'])
