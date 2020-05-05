@@ -1,7 +1,11 @@
 from django.core.management.base import BaseCommand, CommandError
 from optparse import make_option
 import logging
-from django.db.models import Sum, Count
+from django.db.models import (
+    Count,
+    Q,
+    Sum,
+)
 from decimal import Decimal
 
 import pytz
@@ -40,12 +44,12 @@ class Command(BaseCommand):
     help = ('Generate end of month tax receipts')
 
     option_list = BaseCommand.option_list + (
-        make_option(
-            '--quiet',
-            dest='quiet',
-            action='store_true',
-            help='Disable debug logging',
-        ),
+        # make_option(
+        #     '--quiet',
+        #     dest='quiet',
+        #     action='store_true',
+        #     help='Disable debug logging',
+        # ),
         make_option(
             '--date',
             dest='today_date',
@@ -129,6 +133,13 @@ class Command(BaseCommand):
 
         self.dry_run = options['dry_run']
 
+        if options['logging']:
+            self.enable_logging()
+        if options['event_id']:
+            self.event_id = options['event_id']
+        if options['user_id']:
+            self.user_id = options['user_id']
+
         self.logger.info("------Starting generate tax receipts------")
         self.logger.info("start: {}".format(self.period_start))
         self.logger.info("end: {}".format(self.period_end))
@@ -143,6 +154,14 @@ class Command(BaseCommand):
             self.period_end
         )
 
+        optional_filter = []
+
+        if self.event_id:
+            optional_filter.append(Q(event=self.event_id))
+
+        if self.user_id:
+            optional_filter.append(Q(event__user=self.user_id))
+
         query_results = Order.objects.select_related('event', 'event___paymentoptions').filter(
             status=100,
             pp_date__gte=localize_start_date,
@@ -152,6 +171,7 @@ class Command(BaseCommand):
             mg_fee__gt=Decimal('0.00'),
             event___paymentoptions__epp_country__in=self.declarable_tax_receipt_countries,
             event___paymentoptions__accept_eventbrite=True,
+            *optional_filter
         ).values(
             'event_id',
             'event__user_id',
@@ -168,8 +188,7 @@ class Command(BaseCommand):
             total_taxable_amount_with_tax_amount=Sum('mg_fee'),
             total_tax_amount=Sum('eb_tax'),
             payment_transactions_count=Count('event'),
-        ).iterator()
-
+        )
         for result in query_results:
             payment_option = {
                 'epp_country': result['event___paymentoptions__epp_country'],
