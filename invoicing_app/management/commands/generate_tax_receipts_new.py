@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand, CommandError
 from optparse import make_option
 import logging
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from decimal import Decimal
 
 import pytz
@@ -151,6 +151,14 @@ class Command(BaseCommand):
             self.period_end
         )
 
+        optional_filter = []
+
+        if self.event_id:
+            optional_filter.append(Q(event=self.event_id))
+
+        if self.user_id:
+            optional_filter.append(Q(event__user=self.user_id))
+
         query_results = Order.objects.select_related('event', 'event___paymentoptions').filter(
             status=100,
             pp_date__gte=localize_start_date,
@@ -160,6 +168,7 @@ class Command(BaseCommand):
             mg_fee__gt=Decimal('0.00'),
             event___paymentoptions__epp_country__in=self.declarable_tax_receipt_countries,
             event___paymentoptions__accept_eventbrite=True,
+            *optional_filter
         ).values(
             'event_id',
             'event__user_id',
@@ -331,7 +340,6 @@ class Command(BaseCommand):
             self.parent_payment_options[event_id] = parent_payment_options
 
         else:
-            print self.parent_payment_options
             parent_payment_options = self.parent_payment_options[event_id]
 
         return parent_payment_options
@@ -345,4 +353,4 @@ class Command(BaseCommand):
             'epp_zip',
             'epp_city',
             'epp_state',
-        )[0]
+        ).first()
