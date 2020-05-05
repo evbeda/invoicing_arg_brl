@@ -367,6 +367,101 @@ class TestIntegration(TestCase):
         )
 
     @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    )
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
+    )
+    def test_generate_tax_receipts_w_o_outdate(self, patch_call, patch_call_new):
+        my_user_3 = UserFactory.build(
+            username='user_2'
+        )
+        my_user_3.save()
+        my_event_3 = EventFactory.build(
+            user=my_user_3
+        )
+        my_event_3.save()
+        my_pay_opt_3 = PaymentOptionsFactory.build(
+            event=my_event_3,
+        )
+        my_pay_opt_3.save()
+        # Set the mg_fee in 11.0 to see that the element that goes to the service isn't this
+        my_order_3 = OrderFactory.build(
+            event=my_event_3,
+            mg_fee=11.0,
+            pp_date=str(dt(2020, 07, 10, 0, 0))
+        )
+        my_order_3.save()
+        self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
+        # Expected is 400 because mg_fee is 5.1 and eb_tax = 1.1
+        expected_tot_tax_amount = 400
+        call_once = 1
+        self.assertEqual(
+            patch_call.call_count,
+            call_once
+        )
+        self.assertEqual(
+            patch_call_new.call_count,
+            call_once
+        )
+        self.assertEqual(
+            patch_call.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
+            expected_tot_tax_amount
+        )
+        self.assertEqual(
+            patch_call_new.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
+            expected_tot_tax_amount
+        )
+
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    )
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
+    )
+    def test_generate_tax_receipts_w_2_calls(self, patch_call, patch_call_new):
+        my_user_4 = UserFactory.build(
+            username='user_2'
+        )
+        my_user_4.save()
+        my_event_4 = EventFactory.build(
+            user=my_user_4
+        )
+        my_event_4.save()
+        my_pay_opt_4 = PaymentOptionsFactory.build(
+            event=my_event_4,
+        )
+        my_pay_opt_4.save()
+        # Set the mg_fee in 11.0 to see that the element that goes to the service is this
+        my_order_4 = OrderFactory.build(
+            event=my_event_4,
+            mg_fee=11.0,
+        )
+        my_order_4.save()
+        self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
+        # Expected is 400 because mg_fee is 11.0 and eb_tax = 1.1
+        expected_tot_tax_amount = 990
+        call_twice = 2
+        self.assertEqual(
+            patch_call.call_count,
+            call_twice
+        )
+        self.assertEqual(
+            patch_call_new.call_count,
+            call_twice
+        )
+        self.assertEqual(
+            patch_call.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
+            expected_tot_tax_amount
+        )
+        self.assertEqual(
+            patch_call_new.call_args[0][0]['tax_receipt']['total_taxable_amount']['value'],
+            expected_tot_tax_amount
+        )
+
+    @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
     )
     @patch(
