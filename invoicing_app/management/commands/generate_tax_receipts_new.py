@@ -11,7 +11,7 @@ from dateutil.relativedelta import relativedelta
 
 from invoicing import settings
 
-from invoicing_app.models import PaymentOptions, Event, Order
+from invoicing_app.models import PaymentOptions, Order
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
@@ -84,6 +84,13 @@ class Command(BaseCommand):
             default=False,
             help='specific country to process (like AR or BR)',
         ),
+        make_option(
+            '--podict',
+            dest="use_po_dict",
+            default=True,
+            help='flag to use or not a dict'
+                 ' for cache the result of payment options of parents events',
+        ),
     )
 
     def __init__(self, *args, **kwargs):
@@ -91,6 +98,7 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
+        self.parent_payment_options = {}
 
         super(Command, self).__init__(*args, **kwargs)
 
@@ -155,8 +163,9 @@ class Command(BaseCommand):
         ).values(
             'event_id',
             'event__user_id',
-            'event___paymentoptions__epp_country',
+            'event__event_parent',
             'event__currency',
+            'event___paymentoptions__epp_country',
             'event___paymentoptions__epp_name_on_account',
             'event___paymentoptions__epp_address1',
             'event___paymentoptions__epp_address2',
@@ -171,6 +180,20 @@ class Command(BaseCommand):
         ).iterator()
 
         for result in query_results:
+            if result['event__event_parent']:
+                if options['use_po_dict']:
+                    parent_payment_options = self.get_parent_payment_options_dict(result['event__event_parent'])
+                else:
+                    parent_payment_options = self.search_parent_payment_options(result['event__event_parent'])
+
+                result['event___paymentoptions__epp_country'] = parent_payment_options['epp_country']
+                result['event___paymentoptions__epp_name_on_account'] = parent_payment_options['epp_name_on_account']
+                result['event___paymentoptions__epp_address1'] = parent_payment_options['epp_address1']
+                result['event___paymentoptions__epp_address2'] = parent_payment_options['epp_address2']
+                result['event___paymentoptions__epp_zip'] = parent_payment_options['epp_zip']
+                result['event___paymentoptions__epp_city'] = parent_payment_options['epp_city']
+                result['event___paymentoptions__epp_state'] = parent_payment_options['epp_state']
+
             payment_option = {
                 'epp_country': result['event___paymentoptions__epp_country'],
                 'epp_name_on_account': result['event___paymentoptions__epp_name_on_account'],
@@ -240,8 +263,8 @@ class Command(BaseCommand):
         if not EB_TAX_INFO:
             raise Exception('Cannot find EVENTBRITE_TAX_INFORMATION in settings')
         total_taxable_amount = (
-            tax_receipt_orders['total_taxable_amount_with_tax_amount'] -
-            tax_receipt_orders['total_tax_amount']
+                tax_receipt_orders['total_taxable_amount_with_tax_amount'] -
+                tax_receipt_orders['total_tax_amount']
         )
         orders_kwargs = {
             'tax_receipt': {
@@ -300,3 +323,26 @@ class Command(BaseCommand):
 
     def call_service(self, orders_kwargs):
         pass
+
+    def get_parent_payment_options_dict(self, event_id):
+        if event_id not in self.parent_payment_options:
+            parent_payment_options = self.search_parent_payment_options(event_id)
+
+            self.parent_payment_options[event_id] = parent_payment_options
+
+        else:
+            print self.parent_payment_options
+            parent_payment_options = self.parent_payment_options[event_id]
+
+        return parent_payment_options
+
+    def search_parent_payment_options(self, event_id):
+        return PaymentOptions.objects.filter(event=event_id).values(
+            'epp_country',
+            'epp_name_on_account',
+            'epp_address1',
+            'epp_address2',
+            'epp_zip',
+            'epp_city',
+            'epp_state',
+        )[0]
