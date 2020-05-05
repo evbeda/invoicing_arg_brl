@@ -44,12 +44,6 @@ class Command(BaseCommand):
     help = ('Generate end of month tax receipts')
 
     option_list = BaseCommand.option_list + (
-        # make_option(
-        #     '--quiet',
-        #     dest='quiet',
-        #     action='store_true',
-        #     help='Disable debug logging',
-        # ),
         make_option(
             '--date',
             dest='today_date',
