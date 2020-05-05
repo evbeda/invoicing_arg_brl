@@ -194,6 +194,7 @@ class Command(BaseCommand):
             total_tax_amount=Sum('eb_tax'),
             payment_transactions_count=Count('event'),
         ).iterator()
+
         for result in query_results:
             if result['event__event_parent']:
                 if options['use_po_dict']:
