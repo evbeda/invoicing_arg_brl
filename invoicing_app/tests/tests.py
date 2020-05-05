@@ -76,6 +76,7 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
             'country': None,
             'no_color': False,
             'logging': False,
+            'use_po_dict': False,
         }
         self.my_command.handle(**options)
         self.my_command_new.handle(**options)
@@ -269,6 +270,7 @@ class TestIntegration(TestCase):
             'country': 'AR',
             'logging': False,
             'test': False,
+            'use_po_dict': False,
         }
         self.my_command = CommandOld()
         self.my_command_new = CommandNew()
@@ -370,22 +372,19 @@ class TestIntegration(TestCase):
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
     )
-    def test_generate_tax_receipts_w_o_oudate(self, patch_call, patch_call_new):
+    def test_generate_tax_receipts_w_o_outdate(self, patch_call, patch_call_new):
         my_user_3 = UserFactory.build(
             username='user_2'
         )
         my_user_3.save()
-
         my_event_3 = EventFactory.build(
             user=my_user_3
         )
         my_event_3.save()
-
         my_pay_opt_3 = PaymentOptionsFactory.build(
             event=my_event_3,
         )
         my_pay_opt_3.save()
-
         # Set the mg_fee in 11.0 to see that the element that goes to the service isn't this
         my_order_3 = OrderFactory.build(
             event=my_event_3,
@@ -393,14 +392,11 @@ class TestIntegration(TestCase):
             pp_date=str(dt(2020, 07, 10, 0, 0))
         )
         my_order_3.save()
-
         self.my_command.handle(**self.options)
         self.my_command_new.handle(**self.options)
-
         # Expected is 400 because mg_fee is 5.1 and eb_tax = 1.1
         expected_tot_tax_amount = 400
         call_once = 1
-
         self.assertEqual(
             patch_call.call_count,
             call_once
@@ -429,31 +425,25 @@ class TestIntegration(TestCase):
             username='user_2'
         )
         my_user_4.save()
-
         my_event_4 = EventFactory.build(
             user=my_user_4
         )
         my_event_4.save()
-
         my_pay_opt_4 = PaymentOptionsFactory.build(
             event=my_event_4,
         )
         my_pay_opt_4.save()
-
         # Set the mg_fee in 11.0 to see that the element that goes to the service is this
         my_order_4 = OrderFactory.build(
             event=my_event_4,
             mg_fee=11.0,
         )
         my_order_4.save()
-
         self.my_command.handle(**self.options)
         self.my_command_new.handle(**self.options)
-
         # Expected is 400 because mg_fee is 11.0 and eb_tax = 1.1
         expected_tot_tax_amount = 990
         call_twice = 2
-
         self.assertEqual(
             patch_call.call_count,
             call_twice
@@ -474,58 +464,72 @@ class TestIntegration(TestCase):
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
     )
-    def test_generate_tax_with_child(self, patch_call):
-        my_user_5 = UserFactory.build(
-            username='user_2'
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    )
+    def test_generate_tax_with_child_without_dict(self, call_new, call_old):
+        self.my_event.is_series_parent = True
+        self.my_event.save()
+
+        child_event = EventFactory.build(
+            user=self.my_event.user,
+            event_parent=self.my_event,
+            event_name='Child'
         )
-        my_user_5.save()
+        child_event.save()
 
-        my_event_5 = EventFactory.build(
-            user=my_user_5,
-            is_series_parent=True
+        child_payment_options = PaymentOptionsFactory.build(
+            event=child_event
         )
-        my_event_5.save()
+        child_payment_options.save()
 
-        my_pay_opt_5 = PaymentOptionsFactory.build(
-            event=my_event_5
-        )
-        my_pay_opt_5.save()
+        self.my_order.event = child_event
+        self.my_order.save()
 
-        # Set the mg_fee in 11.0 to see that the element that goes to the service isn't this
-        my_order_5 = OrderFactory.build(
-            event=my_event_5,
-            mg_fee=11.0,
-        )
-        my_order_5.save()
-
-        my_user_6 = UserFactory.build(
-            username='user_3'
-        )
-        my_user_6.save()
-
-        my_event_6 = EventFactory.build(
-            user=my_user_6,
-            event_parent=my_event_5
-        )
-        my_event_6.save()
-
-        my_pay_opt_6 = my_pay_opt_5
-        my_pay_opt_6.save()
-        # Set the mg_fee in 14.0 to see that the element that goes to the service is this
-        my_order_6 = OrderFactory.build(
-            event=my_event_6,
-            mg_fee=14.0,
-        )
-        my_order_6.save()
-
-        call_twice = 2
-
+        self.options['event_id'] = child_event.id
+        self.my_command_new.handle(**self.options)
+        self.options['event_id'] = self.my_event.id
         self.my_command.handle(**self.options)
-
         self.assertEqual(
-            patch_call.call_count,
-            call_twice
+            call_new.call_args[0][0],
+            call_old.call_args[0][0]
         )
+
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
+    )
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    )
+    def test_generate_tax_with_child_with_dict(self, call_new, call_old):
+        self.options['use_po_dict'] = True
+        self.my_event.is_series_parent = True
+        self.my_event.save()
+
+        child_event = EventFactory.build(
+            user=self.my_event.user,
+            event_parent=self.my_event,
+            event_name='Child'
+        )
+        child_event.save()
+
+        child_payment_options = PaymentOptionsFactory.build(
+            event=child_event
+        )
+        child_payment_options.save()
+
+        self.my_order.event = child_event
+        self.my_order.save()
+
+        self.options['event_id'] = child_event.id
+        self.my_command_new.handle(**self.options)
+        self.options['event_id'] = self.my_event.id
+        self.my_command.handle(**self.options)
+        self.assertEqual(
+            call_new.call_args[0][0],
+            call_old.call_args[0][0]
+        )
+
 
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
