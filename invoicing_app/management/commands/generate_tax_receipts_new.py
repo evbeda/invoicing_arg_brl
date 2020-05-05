@@ -272,8 +272,8 @@ class Command(BaseCommand):
         if not EB_TAX_INFO:
             raise Exception('Cannot find EVENTBRITE_TAX_INFORMATION in settings')
         total_taxable_amount = (
-                tax_receipt_orders['total_taxable_amount_with_tax_amount'] -
-                tax_receipt_orders['total_tax_amount']
+            tax_receipt_orders['total_taxable_amount_with_tax_amount'] -
+            tax_receipt_orders['total_tax_amount']
         )
         orders_kwargs = {
             'tax_receipt': {
