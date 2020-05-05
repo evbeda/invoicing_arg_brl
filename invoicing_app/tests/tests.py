@@ -467,7 +467,7 @@ class TestIntegration(TestCase):
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
     )
-    def test_generate_tax_with_child(self, call_new, call_old):
+    def test_generate_tax_with_child_without_dict(self, call_new, call_old):
         self.my_event.is_series_parent = True
         self.my_event.save()
 
@@ -494,6 +494,42 @@ class TestIntegration(TestCase):
             call_new.call_args[0][0],
             call_old.call_args[0][0]
         )
+
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
+    )
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    )
+    def test_generate_tax_with_child_with_dict(self, call_new, call_old):
+        self.options['use_po_dict'] = True
+        self.my_event.is_series_parent = True
+        self.my_event.save()
+
+        child_event = EventFactory.build(
+            user=self.my_event.user,
+            event_parent=self.my_event,
+            event_name='Child'
+        )
+        child_event.save()
+
+        child_payment_options = PaymentOptionsFactory.build(
+            event=child_event
+        )
+        child_payment_options.save()
+
+        self.my_order.event = child_event
+        self.my_order.save()
+
+        self.options['event_id'] = child_event.id
+        self.my_command_new.handle(**self.options)
+        self.options['event_id'] = self.my_event.id
+        self.my_command.handle(**self.options)
+        self.assertEqual(
+            call_new.call_args[0][0],
+            call_old.call_args[0][0]
+        )
+
 
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
