@@ -182,7 +182,7 @@ class Command(BaseCommand):
             total_taxable_amount_with_tax_amount=Sum('mg_fee'),
             total_tax_amount=Sum('eb_tax'),
             payment_transactions_count=Count('event'),
-        )
+        ).iterator()
         for result in query_results:
             payment_option = {
                 'epp_country': result['event___paymentoptions__epp_country'],
