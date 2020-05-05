@@ -1,7 +1,13 @@
 from django.core.management.base import BaseCommand, CommandError
 from optparse import make_option
 import logging
-from django.db.models import Sum, Count, Q
+
+from django.db.models import (
+    Count,
+    Q,
+    Sum,
+)
+
 from decimal import Decimal
 
 import pytz
@@ -40,12 +46,6 @@ class Command(BaseCommand):
     help = ('Generate end of month tax receipts')
 
     option_list = BaseCommand.option_list + (
-        make_option(
-            '--quiet',
-            dest='quiet',
-            action='store_true',
-            help='Disable debug logging',
-        ),
         make_option(
             '--date',
             dest='today_date',
@@ -136,6 +136,13 @@ class Command(BaseCommand):
             self.declarable_tax_receipt_countries = settings.EVENTBRITE_TAX_INFORMATION.keys()
 
         self.dry_run = options['dry_run']
+
+        if options['logging']:
+            self.enable_logging()
+        if options['event_id']:
+            self.event_id = options['event_id']
+        if options['user_id']:
+            self.user_id = options['user_id']
 
         self.logger.info("------Starting generate tax receipts------")
         self.logger.info("start: {}".format(self.period_start))
