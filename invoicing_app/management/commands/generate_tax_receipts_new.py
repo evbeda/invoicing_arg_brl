@@ -11,7 +11,7 @@ from dateutil.relativedelta import relativedelta
 
 from invoicing import settings
 
-from invoicing_app.models import PaymentOptions, Event, Order
+from invoicing_app.models import Order
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 

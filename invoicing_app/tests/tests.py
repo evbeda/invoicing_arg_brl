@@ -16,8 +16,11 @@ from factories.paymentoptions import PaymentOptionsFactory
 from factories.order import OrderFactory
 
 
-# Unittest for the old script
 class TestScriptGenerateTaxReceiptsOld(TestCase):
+    """
+        Unittest for old and new scripts. In some tests, is aclared if is only for the old script
+        or only for the new script.
+    """
     def setUp(self):
         self.options = {
             'user_id': None,
@@ -72,7 +75,6 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
             'country': None,
             'no_color': False,
             'logging': False,
-            'test': False,
         }
         self.my_command.handle(**options)
         self.my_command_new.handle(**options)
@@ -85,6 +87,7 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
             ['AR', 'BR']
         )
 
+    # Only for the old script
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.generate_tax_receipt_per_payment_options',
     )
@@ -92,6 +95,7 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
         self.my_command.handle(**self.options)
         self.assertEqual(str(type(patch_generate.call_args[0][0])), "<type 'generator'>")
 
+    # Only for the old script
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.generate_tax_receipt_event'
     )
@@ -118,6 +122,7 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
             "<class 'invoicing_app.models.Event'>"
         )
 
+    # Only for the old script
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.generate_tax_receipts'
     )
@@ -169,12 +174,57 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
         my_date = dt(2020, 4, 11, 0, 0)
         self.assertEqual(
             str(self.my_command.localize_date('AR', my_date)),
-            "2020-04-11 00:00:00-03:54"
+            '2020-04-11 00:00:00-03:54'
+        )
+        self.assertEqual(
+            str(self.my_command_new.localize_date('AR', my_date)),
+            '2020-04-11 00:00:00-03:54'
         )
 
+    def test_today_date_incorrect_format(self):
+        # Not a string in correct format date
+        self.options['today_date'] = 'a.asd-asd??++*asd'
+        with self.assertRaises(Exception):
+            self.my_command.handle(**self.options)
+        with self.assertRaises(Exception):
+            self.my_command_new.handle(**self.options)
 
-# Integration for the booth script
+    # Only for old script
+    def test_quiet_option(self):
+        self.options['quiet'] = True
+        self.my_command.handle(**self.options)
+        self.assertEqual(self.my_command.logger.name, 'null')
+
+    # Only for old script
+    def test_event_id_option(self):
+        self.options['event_id'] = '1'
+        self.my_command.handle(**self.options)
+        self.assertEqual(
+            self.my_command.event_id,
+            self.options['event_id']
+        )
+
+    # Only for old script
+    def test_id_user(self):
+        self.options['user_id'] = '1'
+        self.my_command.handle(**self.options)
+        self.assertEqual(
+            self.my_command.user_id,
+            self.options['user_id']
+        )
+
+    def test_invalid_country(self):
+        self.options['country'] = 'ZZ'
+        with self.assertRaises(Exception):
+            self.my_command.handle(**self.options)
+        with self.assertRaises(Exception):
+            self.my_command_new.handle(**self.options)
+
+
 class TestIntegration(TestCase):
+    """
+        Integration tests for both scripts
+    """
     def setUp(self):
         self.options = {
             'user_id': None,
@@ -455,7 +505,7 @@ class TestIntegration(TestCase):
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
     )
-    def test_booth_scripts(self, call_new, call_old):
+    def test_both_scripts(self, call_new, call_old):
         my_command_new = CommandNew()
         self.my_command.handle(**self.options)
         my_command_new.handle(**self.options)
