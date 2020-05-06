@@ -4,6 +4,6 @@ import factory
 class UserFactory(factory.DjangoModelFactory):
     class Meta:
         model = 'invoicing_app.User'
-        django_get_or_create = ('username',)
+        django_get_or_create = ('first_name',)
 
-    username = 'FACTORY_USER_1'
+    first_name = 'FACTORY_USER_1'

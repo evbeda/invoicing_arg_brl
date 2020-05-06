@@ -170,7 +170,7 @@ class Event(
         default='USD',
         max_length=3,
     )
-    repeat_schedule = models.NullCharField(
+    repeat_schedule = models.CharField(
         max_length=40,
     )
 
@@ -180,6 +180,8 @@ class Event(
 
 
 class User(models.Model):
-    username = models.CharField(max_length=50)
-    ##Faltaria el meta, cuando probemos en QA adaptarlo segun nombre.
+    class Meta:
+        managed = True
+        db_table = 'Users'
+    first_name = models.CharField(max_length=50)
 

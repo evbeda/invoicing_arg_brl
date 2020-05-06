@@ -32,8 +32,8 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = (
-    'django.contrib.admin',
     'django.contrib.auth',
+    'django.contrib.admin',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
@@ -105,8 +105,8 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'invoicing',
         'USER': 'root',
-        'PASSWORD': '',
-        'HOST': '127.0.0.1',
+        'PASSWORD': '123456',
+        'HOST': 'localhost',
         'PORT': 3306,
     },
 }
