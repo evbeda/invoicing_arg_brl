@@ -33,6 +33,15 @@ STATUS_CHOICES = (
     (ORDER_DELETED, 'Deleted'),
 )
 
+class SeriesEventModelMixin(object):
+
+    @property
+    def is_series(self):
+        return bool(self.series and not self.is_repeating)
+
+    @property
+    def is_series_parent(self):
+        return self.is_series and self.event_parent_id is None
 
 class Order(models.Model):
 
@@ -123,7 +132,10 @@ class PaymentOptions(models.Model):
     )
 
 
-class Event(models.Model):
+class Event(
+    models.Model,
+    SeriesEventModelMixin
+):
 
     class Meta:
         managed = True
@@ -135,7 +147,7 @@ class Event(models.Model):
         default='',
     )
 
-    is_series_parent = models.BooleanField(
+    series = models.NullBooleanField(
         default=False,
     )
 
@@ -159,6 +171,19 @@ class Event(models.Model):
         max_length=3,
     )
 
+    repeat_schedule = models.CharField(
+        max_length=40,
+    )
+
+    @property
+    def is_repeating(self):
+        return self.repeat_schedule != ''
+
 
 class User(models.Model):
-    username = models.CharField(max_length=50)
+    class Meta:
+        managed = True
+        db_table = 'Users'
+    first_name = models.CharField(max_length=50)
+
+

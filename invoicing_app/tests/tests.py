@@ -160,9 +160,7 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.generate_tax_receipt_event'
     )
     def test_generate_tax_receipt_per_payment_options(self, patch_generate):
-        my_user = UserFactory.build(
-            username='user_a'
-        )
+        my_user = UserFactory.build()
         my_user.save()
         my_event = EventFactory.build(
             user=my_user
@@ -186,7 +184,7 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.generate_tax_receipts'
     )
     def test_generate_tax_receipt_event(self, patch_generate):
-        my_user = UserFactory.build(username='user_1')
+        my_user = UserFactory.build()
         my_user.save()
 
         my_event = EventFactory.build(
@@ -274,7 +272,7 @@ class TestIntegration(TestCase):
         }
         self.my_command = CommandOld()
         self.my_command_new = CommandNew()
-        self.my_user = UserFactory.build(username='user_1')
+        self.my_user = UserFactory.build()
         self.my_user.save()
 
         self.my_event = EventFactory.build(
@@ -319,9 +317,7 @@ class TestIntegration(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
     )
     def test_generate_tax_receipts_w_1_po_CL(self, patch_call, patch_call_new):
-        my_user_2 = UserFactory.build(
-            username='user_2'
-        )
+        my_user_2 = UserFactory.build()
         my_user_2.save()
 
         my_event_2 = EventFactory.build(
@@ -373,9 +369,7 @@ class TestIntegration(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
     )
     def test_generate_tax_receipts_w_o_outdate(self, patch_call, patch_call_new):
-        my_user_3 = UserFactory.build(
-            username='user_2'
-        )
+        my_user_3 = UserFactory.build()
         my_user_3.save()
         my_event_3 = EventFactory.build(
             user=my_user_3
@@ -421,9 +415,7 @@ class TestIntegration(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
     )
     def test_generate_tax_receipts_w_2_calls(self, patch_call, patch_call_new):
-        my_user_4 = UserFactory.build(
-            username='user_2'
-        )
+        my_user_4 = UserFactory.build()
         my_user_4.save()
         my_event_4 = EventFactory.build(
             user=my_user_4
@@ -467,76 +459,6 @@ class TestIntegration(TestCase):
     @patch(
         'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
     )
-    def test_generate_tax_with_child_without_dict(self, call_new, call_old):
-        self.my_event.is_series_parent = True
-        self.my_event.save()
-
-        child_event = EventFactory.build(
-            user=self.my_event.user,
-            event_parent=self.my_event,
-            event_name='Child'
-        )
-        child_event.save()
-
-        child_payment_options = PaymentOptionsFactory.build(
-            event=child_event
-        )
-        child_payment_options.save()
-
-        self.my_order.event = child_event
-        self.my_order.save()
-
-        self.options['event_id'] = child_event.id
-        self.my_command_new.handle(**self.options)
-        self.options['event_id'] = self.my_event.id
-        self.my_command.handle(**self.options)
-        self.assertEqual(
-            call_new.call_args[0][0],
-            call_old.call_args[0][0]
-        )
-
-    @patch(
-        'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
-    )
-    @patch(
-        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
-    )
-    def test_generate_tax_with_child_with_dict(self, call_new, call_old):
-        self.options['use_po_dict'] = True
-        self.my_event.is_series_parent = True
-        self.my_event.save()
-
-        child_event = EventFactory.build(
-            user=self.my_event.user,
-            event_parent=self.my_event,
-            event_name='Child'
-        )
-        child_event.save()
-
-        child_payment_options = PaymentOptionsFactory.build(
-            event=child_event
-        )
-        child_payment_options.save()
-
-        self.my_order.event = child_event
-        self.my_order.save()
-
-        self.options['event_id'] = child_event.id
-        self.my_command_new.handle(**self.options)
-        self.options['event_id'] = self.my_event.id
-        self.my_command.handle(**self.options)
-        self.assertEqual(
-            call_new.call_args[0][0],
-            call_old.call_args[0][0]
-        )
-
-
-    @patch(
-        'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
-    )
-    @patch(
-        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
-    )
     def test_both_scripts(self, call_new, call_old):
         self.my_command.handle(**self.options)
         self.my_command_new.handle(**self.options)
@@ -554,9 +476,7 @@ class TestIntegration(TestCase):
     def test_by_user(self, call_new, call_old):
         self.options['user_id'] = self.my_user.id
 
-        my_user_7 = UserFactory.build(
-            username='user_7'
-        )
+        my_user_7 = UserFactory.build()
         my_user_7.save()
 
         my_event_7 = EventFactory.build(
@@ -602,9 +522,7 @@ class TestIntegration(TestCase):
     def test_by_event(self, call_new, call_old):
         self.options['event_id'] = self.my_event.id
 
-        my_user_8 = UserFactory.build(
-            username='user_8'
-        )
+        my_user_8 = UserFactory.build()
         my_user_8.save()
 
         my_event_8 = EventFactory.build(
@@ -639,4 +557,61 @@ class TestIntegration(TestCase):
         self.assertEqual(
             call_new.call_args[0][0],
             call_old.call_args[0][0]
+        )
+
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
+    )
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    )
+    def test_childs(self, call_new, call_old):
+        my_user_9 = UserFactory.build()
+        my_user_9.save()
+        my_event_9 = EventFactory.build(
+            user=my_user_9,
+        )
+        my_event_9.series = True
+        my_event_9.repeat_schedule = False
+        my_event_9.save()
+        my_pay_opt_9 = PaymentOptionsFactory.build(
+            event=my_event_9,
+        )
+        my_pay_opt_9.save()
+        # ------------------------------------------------ #
+        my_event_child_1 = EventFactory.build(
+            user=my_user_9,
+            event_parent=my_event_9
+        )
+        my_event_child_1.save()
+        my_order_child_1 = OrderFactory.build(
+            event=my_event_child_1
+        )
+        my_order_child_1.save()
+        # ------------------------------------------------ #
+        my_event_child_2 = EventFactory.build(
+            user=my_user_9,
+            event_parent=my_event_9
+        )
+        my_event_child_2.save()
+        my_order_child_2 = OrderFactory.build(
+            event=my_event_child_2
+        )
+        my_order_child_2.save()
+        # ------------------------------------------------ #
+        my_event_child_3 = EventFactory.build(
+            user=my_user_9,
+            event_parent=my_event_9
+        )
+        my_event_child_3.save()
+        my_order_child_3 = OrderFactory.build(
+            event=my_event_child_3
+        )
+        my_order_child_3.save()
+        # ------------------------------------------------ #
+        self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
+        self.assertEqual(
+            call_old.call_count,
+            call_new.call_count
         )
