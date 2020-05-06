@@ -19,8 +19,13 @@ from invoicing import settings
 
 from invoicing_app.models import PaymentOptions, Order
 
+from django.db import connection
+from django.db.models.query import ValuesQuerySet
+
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
+
+# django.db.models.query.ValuesQuerySet
 
 class Command(BaseCommand):
     """
@@ -193,22 +198,82 @@ class Command(BaseCommand):
             total_taxable_amount_with_tax_amount=Sum('mg_fee'),
             total_tax_amount=Sum('eb_tax'),
             payment_transactions_count=Count('event'),
-        ).iterator()
+        )
 
+        with connection.cursor() as cursor:
+            cursor.execute(
+                '''
+                    SELECT
+                        `Orders`.`event` AS `event_id`,
+                        `Events`.`uid` AS `event__user_id`,
+                        `Payment_Options`.`epp_country` AS `event___paymentoptions__epp_country`,
+                        `Events`.`currency` AS `event__currency`,
+                        `Payment_Options`.`epp_name_on_account` AS `event___paymentoptions__epp_name_on_account`,
+                        `Payment_Options`.`epp_address1` AS `event___paymentoptions__epp_address1`,
+                        `Payment_Options`.`epp_address2` AS `event___paymentoptions__epp_address2`,
+                        `Payment_Options`.`epp_zip` AS `event___paymentoptions__epp_zip`,
+                        `Payment_Options`.`epp_city` AS `event___paymentoptions__epp_city`,
+                        `Payment_Options`.`epp_state` AS `event___paymentoptions__epp_state`,
+                        `Events`.`event_parent` AS `event__event_parent`,
+                        COUNT(`Orders`.`event`) AS `payment_transactions_count`,
+                        SUM(`Orders`.`eb_tax`) AS `total_tax_amount`,
+                        SUM(`Orders`.`mg_fee`) AS `total_taxable_amount_with_tax_amount`,
+                        SUM(`Orders`.`gross`) AS `base_amount`
+                    FROM `Orders`
+                        INNER JOIN `Events` ON (`Orders`.`event` = `Events`.`id` )
+                        INNER JOIN `Payment_Options` ON (`Events`.`event_parent` = `Payment_Options`.`event`)
+                    WHERE (
+                        `Orders`.`status` = 100 AND
+                        `Orders`.`pp_date` <= '2020-04-01 00:00:00' AND
+                        `Orders`.`changed` >= '2020-03-01 00:00:00' AND
+                        `Orders`.`mg_fee` > '0.00' AND
+                        `Orders`.`changed` <= '2020-04-01 00:00:00' AND
+                        `Orders`.`pp_date` >= '2020-03-01 00:00:00' AND
+                        `Payment_Options`.`accept_eventbrite` = 1 AND
+                        `Payment_Options`.`epp_country` IN ('AR', 'BR') AND
+                        `Events`.`event_parent` IS NOT NULL
+                    )
+                    GROUP BY
+                        `Orders`.`event`
+                    ORDER BY NULL
+                '''
+            )
+            response = []
+            columns = [col[0] for col in cursor.description]
+            query_results_child = cursor.fetchall()
+            for row in query_results_child:
+                data = {}
+                for index, item in enumerate(row):
+                    if not data.get(row[0], False):
+                        data[columns[index]] = row[index]
+                response.append(data)
+
+        self.iterate_querys_results(query_results, localize_start_date, localize_end_date)
+        self.iterate_querys_results(response, localize_start_date, localize_end_date)
+
+        self.logger.info("------End Generation new tax receipts------")
+        self.logger.info("------Ending generate tax receipts------")
+
+    def _log_exception(self, e, event_id=None, quiet=False):
+        message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format
+        (
+            event_id,
+            e.message,
+            self.dry_run
+        )
+        if not quiet:
+            self.sentry.error('Error in generate_tax_receipts',
+                              extra={
+                                  'view': 'generate_tax_receipts',
+                                  'data': {
+                                      'exception': e,
+                                      'event': event_id,
+                                  }
+                              })
+            self.logger.error(message)
+
+    def iterate_querys_results(self, query_results, localize_start_date, localize_end_date):
         for result in query_results:
-            if result['event__event_parent']:
-                if options['use_po_dict']:
-                    parent_payment_options = self.get_parent_payment_options_dict(result['event__event_parent'])
-                else:
-                    parent_payment_options = self.search_parent_payment_options(result['event__event_parent'])
-
-                result['event___paymentoptions__epp_country'] = parent_payment_options['epp_country']
-                result['event___paymentoptions__epp_name_on_account'] = parent_payment_options['epp_name_on_account']
-                result['event___paymentoptions__epp_address1'] = parent_payment_options['epp_address1']
-                result['event___paymentoptions__epp_address2'] = parent_payment_options['epp_address2']
-                result['event___paymentoptions__epp_zip'] = parent_payment_options['epp_zip']
-                result['event___paymentoptions__epp_city'] = parent_payment_options['epp_city']
-                result['event___paymentoptions__epp_state'] = parent_payment_options['epp_state']
 
             payment_option = {
                 'epp_country': result['event___paymentoptions__epp_country'],
@@ -245,27 +310,6 @@ class Command(BaseCommand):
                     localize_end_date,
                     tax_receipt_orders
                 )
-
-        self.logger.info("------End Generation new tax receipts------")
-        self.logger.info("------Ending generate tax receipts------")
-
-    def _log_exception(self, e, event_id=None, quiet=False):
-        message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format
-        (
-            event_id,
-            e.message,
-            self.dry_run
-        )
-        if not quiet:
-            self.sentry.error('Error in generate_tax_receipts',
-                              extra={
-                                  'view': 'generate_tax_receipts',
-                                  'data': {
-                                      'exception': e,
-                                      'event': event_id,
-                                  }
-                              })
-            self.logger.error(message)
 
     def generate_tax_receipts(
             self,
@@ -335,29 +379,8 @@ class Command(BaseCommand):
                 }],
             }
         }
+
         self.call_service(orders_kwargs)
 
     def call_service(self, orders_kwargs):
         pass
-
-    def get_parent_payment_options_dict(self, event_id):
-        if event_id not in self.parent_payment_options:
-            parent_payment_options = self.search_parent_payment_options(event_id)
-
-            self.parent_payment_options[event_id] = parent_payment_options
-
-        else:
-            parent_payment_options = self.parent_payment_options[event_id]
-
-        return parent_payment_options
-
-    def search_parent_payment_options(self, event_id):
-        return PaymentOptions.objects.filter(event=event_id).values(
-            'epp_country',
-            'epp_name_on_account',
-            'epp_address1',
-            'epp_address2',
-            'epp_zip',
-            'epp_city',
-            'epp_state',
-        ).first()
