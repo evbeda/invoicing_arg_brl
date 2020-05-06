@@ -170,6 +170,7 @@ class Event(
         default='USD',
         max_length=3,
     )
+
     repeat_schedule = models.CharField(
         max_length=40,
     )
@@ -184,4 +185,5 @@ class User(models.Model):
         managed = True
         db_table = 'Users'
     first_name = models.CharField(max_length=50)
+
 
