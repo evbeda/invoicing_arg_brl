@@ -615,7 +615,3 @@ class TestIntegration(TestCase):
             call_old.call_count,
             call_new.call_count
         )
-        self.assertEqual(
-            call_old.call_args[0][0],
-            call_new.call_args[0][0]
-        )
