@@ -267,8 +267,6 @@ class TestIntegration(TestCase):
             'no_color': False,
             'country': 'AR',
             'logging': False,
-            'test': False,
-            'use_po_dict': False,
         }
         self.my_command = CommandOld()
         self.my_command_new = CommandNew()
@@ -566,14 +564,16 @@ class TestIntegration(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
     )
     def test_childs(self, call_new, call_old):
+
         my_user_9 = UserFactory.build()
         my_user_9.save()
         my_event_9 = EventFactory.build(
             user=my_user_9,
         )
         my_event_9.series = True
-        my_event_9.repeat_schedule = False
+        my_event_9.repeat_schedule = ''
         my_event_9.save()
+
         my_pay_opt_9 = PaymentOptionsFactory.build(
             event=my_event_9,
         )
@@ -584,6 +584,7 @@ class TestIntegration(TestCase):
             event_parent=my_event_9
         )
         my_event_child_1.save()
+
         my_order_child_1 = OrderFactory.build(
             event=my_event_child_1
         )
@@ -594,6 +595,7 @@ class TestIntegration(TestCase):
             event_parent=my_event_9
         )
         my_event_child_2.save()
+
         my_order_child_2 = OrderFactory.build(
             event=my_event_child_2
         )
@@ -604,13 +606,16 @@ class TestIntegration(TestCase):
             event_parent=my_event_9
         )
         my_event_child_3.save()
+
         my_order_child_3 = OrderFactory.build(
             event=my_event_child_3
         )
         my_order_child_3.save()
         # ------------------------------------------------ #
+
         self.my_command.handle(**self.options)
         self.my_command_new.handle(**self.options)
+
         self.assertEqual(
             call_old.call_count,
             call_new.call_count
