@@ -617,7 +617,7 @@ class TestIntegration(TestCase):
 
         self.my_command.handle(**self.options)
         self.my_command_new.handle(**self.options)
-        # import ipdb; ipdb.set_trace()
+
         self.assertEqual(
             call_old.call_count,
             call_new.call_count

@@ -17,15 +17,12 @@ from dateutil.relativedelta import relativedelta
 
 from invoicing import settings
 
-from invoicing_app.models import PaymentOptions, Order
+from invoicing_app.models import Order
 
 from django.db import connection
-from django.db.models.query import ValuesQuerySet
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
-
-# django.db.models.query.ValuesQuerySet
 
 class Command(BaseCommand):
     """
@@ -198,7 +195,7 @@ class Command(BaseCommand):
             total_taxable_amount_with_tax_amount=Sum('mg_fee'),
             total_tax_amount=Sum('eb_tax'),
             payment_transactions_count=Count('event'),
-        )
+        ).iterator()
 
         with connection.cursor() as cursor:
             cursor.execute(
