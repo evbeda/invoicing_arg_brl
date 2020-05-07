@@ -267,8 +267,6 @@ class TestIntegration(TestCase):
             'no_color': False,
             'country': 'AR',
             'logging': False,
-            'test': False,
-            'use_po_dict': False,
         }
         self.my_command = CommandOld()
         self.my_command_new = CommandNew()

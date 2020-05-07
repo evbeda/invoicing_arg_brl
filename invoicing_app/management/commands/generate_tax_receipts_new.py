@@ -86,13 +86,6 @@ class Command(BaseCommand):
             default=False,
             help='specific country to process (like AR or BR)',
         ),
-        make_option(
-            '--podict',
-            dest="use_po_dict",
-            default=True,
-            help='flag to use or not a dict'
-                 ' for cache the result of payment options of parents events',
-        ),
     )
 
     def __init__(self, *args, **kwargs):
@@ -100,7 +93,6 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
-        self.parent_payment_options = {}
 
         super(Command, self).__init__(*args, **kwargs)
 
