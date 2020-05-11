@@ -2,12 +2,6 @@ from django.core.management.base import BaseCommand, CommandError
 from optparse import make_option
 import logging
 
-from django.db.models import (
-    Count,
-    Q,
-    Sum,
-)
-
 from decimal import Decimal
 
 import pytz
@@ -16,8 +10,6 @@ from datetime import datetime as dt
 from dateutil.relativedelta import relativedelta
 
 from invoicing import settings
-
-from invoicing_app.models import Order
 
 from django.db import connection
 
@@ -67,13 +59,6 @@ class Command(BaseCommand):
             help='Enter a user ID',
         ),
         make_option(
-            '--dry_run',
-            action="store_true",
-            dest='dry_run',
-            default=False,
-            help='If set, nothing will be written to DB tables.',
-        ),
-        make_option(
             '--logging',
             action="store_true",
             dest="logging",
@@ -93,105 +78,7 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
-
-        super(Command, self).__init__(*args, **kwargs)
-
-    def localize_date(self, country_code, date):
-        event_timezone = pytz.country_timezones(country_code)[0]
-        return dt(
-            year=date.year,
-            month=date.month,
-            day=date.day,
-            tzinfo=pytz.timezone(event_timezone)
-        )
-
-    def handle(self, **options):
-        if options['today_date']:
-            try:
-                today = dt.strptime(options['today_date'], '%Y-%m-%d')
-                self.period_end = dt(today.year, today.month, today.day)
-            except Exception:
-                raise CommandError("Date is not matching format YYYY-MM-DD")
-        else:
-            today = dt.today()
-
-        curr_month = dt(today.year, today.month, 1)
-        prev_month = curr_month - relativedelta(months=1)
-        self.period_start = prev_month
-        self.period_end = curr_month
-
-        if options['country']:
-            if options['country'] not in settings.EVENTBRITE_TAX_INFORMATION:
-                raise CommandError(
-                    'The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)'
-                )
-            self.declarable_tax_receipt_countries = [options['country']]
-        else:
-            self.declarable_tax_receipt_countries = settings.EVENTBRITE_TAX_INFORMATION.keys()
-
-        self.dry_run = options['dry_run']
-
-        if options['logging']:
-            self.enable_logging()
-        if options['event_id']:
-            self.event_id = options['event_id']
-        if options['user_id']:
-            self.user_id = options['user_id']
-
-        self.logger.info("------Starting generate tax receipts------")
-        self.logger.info("start: {}".format(self.period_start))
-        self.logger.info("end: {}".format(self.period_end))
-
-        # If the country is not specified, 'AR' will be set
-        localize_start_date = self.localize_date(
-            self.declarable_tax_receipt_countries[0],
-            self.period_start
-        )
-        localize_end_date = self.localize_date(
-            self.declarable_tax_receipt_countries[0],
-            self.period_end
-        )
-
-        optional_filter = []
-
-        if self.event_id:
-            optional_filter.append(Q(event=self.event_id))
-
-        if self.user_id:
-            optional_filter.append(Q(event__user=self.user_id))
-
-        query_results = Order.objects.select_related('event', 'event___paymentoptions').filter(
-            status=100,
-            pp_date__gte=localize_start_date,
-            pp_date__lte=localize_end_date,
-            changed__gte=localize_start_date,
-            changed__lte=localize_end_date,
-            mg_fee__gt=Decimal('0.00'),
-            event___paymentoptions__epp_country__in=self.declarable_tax_receipt_countries,
-            event___paymentoptions__accept_eventbrite=True,
-            *optional_filter
-        ).values(
-            'event_id',
-            'event__user_id',
-            'event__event_parent',
-            'event__currency',
-            'event___paymentoptions__epp_country',
-            'event___paymentoptions__epp_name_on_account',
-            'event___paymentoptions__epp_address1',
-            'event___paymentoptions__epp_address2',
-            'event___paymentoptions__epp_zip',
-            'event___paymentoptions__epp_city',
-            'event___paymentoptions__epp_state',
-        ).annotate(
-            base_amount=Sum('gross'),
-            total_taxable_amount_with_tax_amount=Sum('mg_fee'),
-            total_tax_amount=Sum('eb_tax'),
-            payment_transactions_count=Count('event'),
-        ).iterator()
-
-        with connection.cursor() as cursor:
-            cursor.execute(
-                '''
+        self.query = '''
                     SELECT
                         `Orders`.`event` AS `event_id`,
                         `Events`.`uid` AS `event__user_id`,
@@ -210,36 +97,100 @@ class Command(BaseCommand):
                         SUM(`Orders`.`gross`) AS `base_amount`
                     FROM `Orders`
                         INNER JOIN `Events` ON (`Orders`.`event` = `Events`.`id` )
-                        INNER JOIN `Payment_Options` ON (`Events`.`event_parent` = `Payment_Options`.`event`)
+                        INNER JOIN `Payment_Options` ON PARENT_CHILD_MASK
                     WHERE (
-                        `Orders`.`status` = 100 AND
-                        `Orders`.`pp_date` <= '2020-04-01 00:00:00' AND
-                        `Orders`.`changed` >= '2020-03-01 00:00:00' AND
+                        `Orders`.`status` = %(status_query)s AND
+                        `Orders`.`pp_date` <= %(localize_end_date_query)s AND
+                        `Orders`.`changed` >= %(localize_start_date_query)s AND
                         `Orders`.`mg_fee` > '0.00' AND
-                        `Orders`.`changed` <= '2020-04-01 00:00:00' AND
-                        `Orders`.`pp_date` >= '2020-03-01 00:00:00' AND
+                        `Orders`.`changed` <= %(localize_end_date_query)s AND
+                        `Orders`.`pp_date` >= %(localize_start_date_query)s AND
                         `Payment_Options`.`accept_eventbrite` = 1 AND
-                        `Payment_Options`.`epp_country` IN ('AR', 'BR') AND
-                        `Events`.`event_parent` IS NOT NULL
+                        `Payment_Options`.`epp_country` = %(declarable_tax_receipt_countries_query)s
+                        CONDITION_MASK
                     )
                     GROUP BY
-                        `Orders`.`event`
+                        `event_id`
                     ORDER BY NULL
                 '''
+        super(Command, self).__init__(*args, **kwargs)
+
+    def handle(self, **options):
+
+        if options['country']:
+            if options['country'] not in settings.EVENTBRITE_TAX_INFORMATION:
+                raise CommandError(
+                    'The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)'
+                )
+            self.declarable_tax_receipt_countries = str(options['country'])
+        else:
+            raise CommandError(
+                'No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)'
             )
-            response = []
-            columns = [col[0] for col in cursor.description]
-            query_results_child = cursor.fetchall()
-            for row in query_results_child:
-                data = {}
-                for index, item in enumerate(row):
-                    if not data.get(row[0], False):
-                        data[columns[index]] = row[index]
-                response.append(data)
 
-        self.iterate_querys_results(query_results, localize_start_date, localize_end_date)
-        self.iterate_querys_results(response, localize_start_date, localize_end_date)
+        if options['user_id'] and options['event_id']:
+            raise CommandError('Can not use both options in the same time')
 
+        if options['today_date']:
+            try:
+                today = dt.strptime(options['today_date'], '%Y-%m-%d')
+                self.period_end = dt(today.year, today.month, today.day)
+            except Exception:
+                raise CommandError("Date is not matching format YYYY-MM-DD")
+        else:
+            today = dt.today()
+
+        curr_month = dt(today.year, today.month, 1)
+        prev_month = curr_month - relativedelta(months=1)
+        self.period_start = prev_month
+        self.period_end = curr_month
+
+        if options['logging']:
+            self.enable_logging()
+
+        if options['event_id']:
+            self.event_id = options['event_id']
+            self.query = self.query.replace(
+                'CONDITION_MASK',
+                'AND `Events`.`id` = ' + str(self.event_id)
+            )
+
+        if options['user_id']:
+            self.user_id = options['user_id']
+            self.query = self.query.replace(
+                'CONDITION_MASK',
+                'AND `Events`.`uid` = ' + str(self.user_id)
+            )
+
+        # If there isn't condition, remove the CONDITION MASK from the query
+        if (not options['user_id']) and (not options['event_id']):
+            self.query = self.query.replace(
+                'CONDITION_MASK',
+                ''
+            )
+
+        self.logger.info("------Starting generate tax receipts------")
+        self.logger.info("start: {}".format(self.period_start))
+        self.logger.info("end: {}".format(self.period_end))
+
+        localize_start_date = self.localize_date(
+            self.declarable_tax_receipt_countries,
+            self.period_start
+        )
+        localize_end_date = self.localize_date(
+            self.declarable_tax_receipt_countries,
+            self.period_end
+        )
+
+        query_options = {
+            'localize_end_date_query': localize_end_date,
+            'localize_start_date_query': localize_start_date,
+            'declarable_tax_receipt_countries_query': self.declarable_tax_receipt_countries,
+            'status_query': 100,
+        }
+
+        self.get_and_iterate_no_series_events(query_options)
+        self.get_and_iterate_child_events(query_options)
         self.logger.info("------End Generation new tax receipts------")
         self.logger.info("------Ending generate tax receipts------")
 
@@ -260,6 +211,76 @@ class Command(BaseCommand):
                                   }
                               })
             self.logger.error(message)
+
+    def localize_date(self, country_code, date):
+        event_timezone = pytz.country_timezones(country_code)[0]
+        return dt(
+            year=date.year,
+            month=date.month,
+            day=date.day,
+            tzinfo=pytz.timezone(event_timezone)
+        )
+
+    def get_and_iterate_no_series_events(self, query_options):
+        # Replace of PARENT_CHILD_MASK for the no-series condition in INNER JOIN
+        self.query = self.query.replace(
+            'PARENT_CHILD_MASK',
+            '(`Events`.`id` = `Payment_Options`.`event`)'
+        )
+        query_results = self.get_query_results(query_options)
+        self.iterate_querys_results(
+            query_results,
+            query_options['localize_start_date_query'],
+            query_options['localize_end_date_query'],
+        )
+        # Undo the replacing of PARENT_CHILD_MASK for the child events
+        self.query = self.query.replace(
+            '(`Events`.`id` = `Payment_Options`.`event`)',
+            'PARENT_CHILD_MASK'
+        )
+
+    def get_and_iterate_child_events(self, query_options):
+        self.query = self.query.replace(
+            'PARENT_CHILD_MASK',
+            '(`Events`.`event_parent` = `Payment_Options`.`event`)'
+        )
+        # Can't use a mask here, so replace a entire WHERE condition
+        self.query = self.query.replace(
+            '`Payment_Options`.`accept_eventbrite` = 1 AND',
+            '`Payment_Options`.`accept_eventbrite` = 1 AND `Events`.`event_parent` IS NOT NULL AND',
+        )
+
+        query_results = self.get_query_results(query_options)
+
+        self.iterate_querys_results(
+            query_results,
+            query_options['localize_start_date_query'],
+            query_options['localize_end_date_query'],
+        )
+
+        self.query = self.query.replace(
+            '(`Events`.`event_parent` = `Payment_Options`.`event`)',
+            'PARENT_CHILD_MASK'
+        )
+
+    def get_query_results(self, query_options):
+        query_results = []
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                self.query,
+                query_options
+            )
+            response = cursor.fetchall()
+
+            columns = [col[0] for col in cursor.description]
+            for row in response:
+                data = {}
+                for index, item in enumerate(row):
+                    if not data.get(row[0], False):
+                        data[columns[index]] = row[index]
+                query_results.append(data)
+            return query_results
 
     def iterate_querys_results(self, query_results, localize_start_date, localize_end_date):
         for result in query_results:
