@@ -53,13 +53,18 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
     def test_handle_countries(self):
         self.my_command.handle(**self.options)
         self.my_command_new.handle(**self.options)
+
         self.assertEqual(
             self.my_command.declarable_tax_receipt_countries,
             ['AR']
         )
         self.assertEqual(
             self.my_command_new.declarable_tax_receipt_countries,
-            ['AR']
+            'AR'
+        )
+        self.assertNotIn(
+            'CONDITION_MASK',
+            self.my_command_new.query
         )
 
     def test_handle_with_no_country(self):
@@ -79,14 +84,15 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
             'use_po_dict': False,
         }
         self.my_command.handle(**options)
-        self.my_command_new.handle(**options)
         self.assertEqual(
             self.my_command.declarable_tax_receipt_countries,
             ['AR', 'BR']
         )
+        with self.assertRaises(CommandError) as cm:
+            self.my_command_new.handle(**options)
         self.assertEqual(
-            self.my_command_new.declarable_tax_receipt_countries,
-            ['AR', 'BR']
+            str(cm.exception),
+            'No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)'
         )
 
     def test_localize_date_old(self):
@@ -125,6 +131,44 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
         self.assertEqual(
             str(cm.exception),
             'The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)'
+        )
+
+    def test_event_id_option(self):
+        self.options['event_id'] = '1'
+
+        self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
+
+        self.assertEqual(
+            self.my_command.event_id,
+            self.options['event_id']
+        )
+        self.assertEqual(
+            self.my_command_new.event_id,
+            self.options['event_id']
+        )
+        self.assertIn(
+            'AND `Events`.`id` = {}'.format(self.options['event_id']),
+            self.my_command_new.query
+        )
+
+    def test_user_id_option(self):
+        self.options['user_id'] = '1'
+
+        self.my_command.handle(**self.options)
+        self.my_command_new.handle(**self.options)
+
+        self.assertEqual(
+            self.my_command.user_id,
+            self.options['user_id']
+        )
+        self.assertEqual(
+            self.my_command_new.user_id,
+            self.options['user_id']
+        )
+        self.assertIn(
+            'AND `Events`.`uid` = {}'.format(self.options['user_id']),
+            self.my_command_new.query
         )
 
 
@@ -232,22 +276,139 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
         self.my_command.handle(**self.options)
         self.assertEqual(self.my_command.logger.name, 'null')
 
-    def test_event_id_option(self):
-        self.options['event_id'] = '1'
-        self.my_command.handle(**self.options)
+
+class TestScriptGenerateTaxReceiptsNew(TestCase):
+    """
+        Unittest for the new script
+    """
+    def setUp(self):
+        self.options = {
+            'user_id': None,
+            'dry_run': False,
+            'settings': None,
+            'event_id': None,
+            'pythonpath': None,
+            'verbosity': 1,
+            'traceback': False,
+            'quiet': False,
+            'today_date': '2020-04-08',
+            'no_color': False,
+            'country': 'AR',
+            'logging': False,
+        }
+        self.my_command_new = CommandNew()
+
+        self.my_user = UserFactory.build()
+        self.my_user.save()
+
+        self.my_event = EventFactory.build(
+            user=self.my_user
+        )
+        self.my_event.save()
+
+        self.my_pay_opt = PaymentOptionsFactory.build(
+            event=self.my_event,
+        )
+        self.my_pay_opt.save()
+
+        self.my_order = OrderFactory.build(
+            event=self.my_event,
+        )
+        self.my_order.save()
+
+    def test_pass_envet_and_user_options(self):
+        self.options['user_id'] = 1
+        self.options['event_id'] = 1
+
+        with self.assertRaises(CommandError) as cm:
+            self.my_command_new.handle(**self.options)
         self.assertEqual(
-            self.my_command.event_id,
-            self.options['event_id']
+            str(cm.exception),
+            'Can not use both options in the same time'
         )
 
-    def test_id_user(self):
-        self.options['user_id'] = '1'
-        self.my_command.handle(**self.options)
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.iterate_querys_results'
+    )
+    def test_get_and_iterate_no_series_events(self, patch_iterate):
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': self.options['country'],
+            'status_query': 100,
+        }
+        self.my_command_new.query = self.my_command_new.query.replace(
+            'CONDITION_MASK',
+            ''
+        )
+        self.my_command_new.get_and_iterate_no_series_events(query_options_test)
+        returns_one_element = 1
         self.assertEqual(
-            self.my_command.user_id,
-            self.options['user_id']
+            len(patch_iterate.call_args[0][0]),
+            returns_one_element
+        )
+        self.assertEqual(
+            patch_iterate.call_args[0][1],
+            query_options_test['localize_start_date_query']
+        )
+        self.assertEqual(
+            patch_iterate.call_args[0][2],
+            query_options_test['localize_end_date_query']
         )
 
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.iterate_querys_results'
+    )
+    def test_get_and_iterate_child_events(self, patch_iterate):
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': self.options['country'],
+            'status_query': 100,
+        }
+        self.my_command_new.query = self.my_command_new.query.replace(
+            'CONDITION_MASK',
+            ''
+        )
+        self.my_command_new.get_and_iterate_child_events(query_options_test)
+        returns_zero_elements = 0
+        self.assertEqual(
+            len(patch_iterate.call_args[0][0]),
+            returns_zero_elements
+        )
+        self.assertEqual(
+            patch_iterate.call_args[0][1],
+            query_options_test['localize_start_date_query']
+        )
+        self.assertEqual(
+            patch_iterate.call_args[0][2],
+            query_options_test['localize_end_date_query']
+        )
+
+    def test_get_query_results(self):
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': self.options['country'],
+            'status_query': 100,
+        }
+        self.my_command_new.query = self.my_command_new.query.replace(
+            'CONDITION_MASK',
+            ''
+        )
+        self.my_command_new.query = self.my_command_new.query.replace(
+            'PARENT_CHILD_MASK',
+            '(`Events`.`id` = `Payment_Options`.`event`)'
+        )
+        returns_one_element = 1
+        self.assertEqual(
+            str(type(self.my_command_new.get_query_results(query_options_test))),
+            "<type 'list'>"
+        )
+        self.assertEqual(
+            len(self.my_command_new.get_query_results(query_options_test)),
+            returns_one_element
+        )
 
 class TestIntegration(TestCase):
     """
