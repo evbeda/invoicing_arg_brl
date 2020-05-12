@@ -8,7 +8,7 @@ omit =
     invoicing_app/views.py
     invoicing_app/admin.py
     invoicing_app/models.py
-    invoicing_app/management/generate_tax_receipts_old.py
+    invoicing_app/management/commands/generate_tax_receipts_old.py
     invoicing/*
     manage.py
 
