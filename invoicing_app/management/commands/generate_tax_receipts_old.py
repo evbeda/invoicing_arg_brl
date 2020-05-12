@@ -173,7 +173,7 @@ class Command(BaseCommand):
                     self.generate_tax_receipt_event(payment_option, payment_option.event)
 
             except Exception as e:
-                print 'ERROR linea 176'
+                raise self._log_exception(e)
 
     def localize_date(self, country_code, date):
         event_timezone = pytz.country_timezones(country_code)[0]
