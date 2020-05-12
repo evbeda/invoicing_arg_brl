@@ -19,7 +19,7 @@ class PaymentOptionsFactory(factory.DjangoModelFactory):
             'epp_zip',
             'epp_city',
             'epp_state',
-            'epp_tax_identifier'
+            'epp_tax_identifier',
         )
 
     epp_country = 'AR'
