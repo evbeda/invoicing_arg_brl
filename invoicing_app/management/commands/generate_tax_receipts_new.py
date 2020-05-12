@@ -59,6 +59,13 @@ class Command(BaseCommand):
             help='Enter a user ID',
         ),
         make_option(
+            '--dry_run',
+            action="store_true",
+            dest='dry_run',
+            default=False,
+            help='If set, nothing will be written to DB tables.',
+        ),
+        make_option(
             '--logging',
             action="store_true",
             dest="logging",
@@ -80,17 +87,18 @@ class Command(BaseCommand):
         self.sentry = logging.getLogger('sentry')
         self.query = '''
                     SELECT
-                        `Orders`.`event` AS `event_id`,
-                        `Events`.`uid` AS `event__user_id`,
-                        `Payment_Options`.`epp_country` AS `event___paymentoptions__epp_country`,
-                        `Events`.`currency` AS `event__currency`,
-                        `Payment_Options`.`epp_name_on_account` AS `event___paymentoptions__epp_name_on_account`,
-                        `Payment_Options`.`epp_address1` AS `event___paymentoptions__epp_address1`,
-                        `Payment_Options`.`epp_address2` AS `event___paymentoptions__epp_address2`,
-                        `Payment_Options`.`epp_zip` AS `event___paymentoptions__epp_zip`,
-                        `Payment_Options`.`epp_city` AS `event___paymentoptions__epp_city`,
-                        `Payment_Options`.`epp_state` AS `event___paymentoptions__epp_state`,
-                        `Events`.`event_parent` AS `event__event_parent`,
+                        `Orders`.`event` as `event_id`,
+                        `Events`.`uid` as `user_id`,
+                        `Events`.`event_parent` as `event_parent`,
+                        `Events`.`currency` as `currency`,
+                        `Payment_Options`.`epp_country` as `epp_country`,
+                        `Payment_Options`.`epp_name_on_account` as `epp_name_on_account`,
+                        `Payment_Options`.`epp_address1` as `epp_address1`,
+                        `Payment_Options`.`epp_address2` as `epp_address2`,
+                        `Payment_Options`.`epp_zip` as `epp_zip`,
+                        `Payment_Options`.`epp_city` as `epp_city`,
+                        `Payment_Options`.`epp_state` as `epp_state`,
+                        `Payment_Options`.`epp_tax_identifier` as `epp_tax_identifier`,
                         COUNT(`Orders`.`event`) AS `payment_transactions_count`,
                         SUM(`Orders`.`eb_tax`) AS `total_tax_amount`,
                         SUM(`Orders`.`mg_fee`) AS `total_taxable_amount_with_tax_amount`,
@@ -169,6 +177,7 @@ class Command(BaseCommand):
                 ''
             )
 
+        self.dry_run = options['dry_run']
         self.logger.info("------Starting generate tax receipts------")
         self.logger.info("start: {}".format(self.period_start))
         self.logger.info("end: {}".format(self.period_end))
@@ -286,19 +295,20 @@ class Command(BaseCommand):
         for result in query_results:
 
             payment_option = {
-                'epp_country': result['event___paymentoptions__epp_country'],
-                'epp_name_on_account': result['event___paymentoptions__epp_name_on_account'],
-                'epp_address1': result['event___paymentoptions__epp_address1'],
-                'epp_address2': result['event___paymentoptions__epp_address2'],
-                'epp_zip': result['event___paymentoptions__epp_zip'],
-                'epp_city': result['event___paymentoptions__epp_city'],
-                'epp_state': result['event___paymentoptions__epp_state']
+                'epp_country': result['epp_country'],
+                'epp_name_on_account': result['epp_name_on_account'],
+                'epp_address1': result['epp_address1'],
+                'epp_address2': result['epp_address2'],
+                'epp_zip': result['epp_zip'],
+                'epp_city': result['epp_city'],
+                'epp_state': result['epp_state'],
+                'epp_tax_identifier': result['epp_tax_identifier'],
             }
 
             event = {
                 'id': result['event_id'],
-                'user_id': result['event__user_id'],
-                'currency': result['event__currency'],
+                'user_id': result['user_id'],
+                'currency': result['currency'],
             }
 
             tax_receipt_orders = {
@@ -312,6 +322,19 @@ class Command(BaseCommand):
                 # EB-28811: some eb_tax in DB has Null
                 if result['total_tax_amount'] is None:
                     result['total_tax_amount'] = Decimal('0.00')
+
+                self.logger.info(
+                    ('Processing event: %i total_taxable_amount_with_tax_amount: %s ' +
+                     'base_amount: %s total_tax_amount: %s ' +
+                     'payment_transactions_count: %i dry_run: %s') % (
+                        result['event_id'],
+                        str(tax_receipt_orders['total_taxable_amount_with_tax_amount']),
+                        str(tax_receipt_orders['base_amount']),
+                        str(tax_receipt_orders['total_tax_amount']),
+                        tax_receipt_orders['payment_transactions_count'],
+                        self.dry_run,
+                    )
+                )
 
                 self.generate_tax_receipts(
                     payment_option,
@@ -333,8 +356,8 @@ class Command(BaseCommand):
         if not EB_TAX_INFO:
             raise Exception('Cannot find EVENTBRITE_TAX_INFORMATION in settings')
         total_taxable_amount = (
-            tax_receipt_orders['total_taxable_amount_with_tax_amount'] -
-            tax_receipt_orders['total_tax_amount']
+                tax_receipt_orders['total_taxable_amount_with_tax_amount'] -
+                tax_receipt_orders['total_tax_amount']
         )
         orders_kwargs = {
             'tax_receipt': {
@@ -390,7 +413,63 @@ class Command(BaseCommand):
             }
         }
 
-        self.call_service(orders_kwargs)
+        if payment_option['epp_tax_identifier']:
+            orders_kwargs['tax_receipt']['recipient_tax_information'] = {
+                'tax_identifier_type': self.get_epp_tax_identifier_type(
+                    payment_option['epp_country'],
+                    payment_option['epp_tax_identifier']
+                ),
+                'tax_identifier_country': payment_option['epp_country'],
+                'tax_identifier_number': payment_option['epp_tax_identifier'],
+            }
+
+        if not self.dry_run:
+            from service import control
+            from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
+            from permissions.noninteractive import get_noninteractive_token
+            client = control.Client('billing')
+            job = client.new_job()
+            auth_token = get_noninteractive_token([PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS.value])['token']
+            job.control.auth = auth_token
+            job.create_tax_receipt(**orders_kwargs)
+            response = client.send_job(job)
+            if response.is_error():
+                raise Exception(response.error_detail)
+            else:
+                self.logger.info(
+                    'Generated Tax Receipt: event: %i response: %s' % (
+                        event.id,
+                        response,
+                    )
+                )
+        else:
+            self.call_service(orders_kwargs)
+
+    def enable_logging(self):
+        console = logging.StreamHandler()
+        console.setLevel(logging.INFO)
+        formatter = logging.Formatter(
+            '%(name)-12s: %(levelname)-8s %(message)s'
+        )
+        console.setFormatter(formatter)
+        self.logger.addHandler(console)
 
     def call_service(self, orders_kwargs):
         pass
+
+    def get_epp_tax_identifier_type(self, epp_country, epp_tax_identifier):
+        if not self.dry_run:
+            from eb_constants import payment_service_constants
+            cpf_char_count_limit = payment_service_constants.CPF_CHAR_COUNT_LIMIT
+        else:
+            cpf_char_count_limit = 11
+
+        if epp_country == 'BR':
+            if len(epp_tax_identifier) > cpf_char_count_limit:
+                return 'CNPJ'
+            else:
+                return 'CPF'
+        if epp_country == 'AR':
+            return 'CUIT'
+
+        return ''

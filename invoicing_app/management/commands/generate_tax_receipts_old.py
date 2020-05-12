@@ -173,7 +173,7 @@ class Command(BaseCommand):
                     self.generate_tax_receipt_event(payment_option, payment_option.event)
 
             except Exception as e:
-                raise self._log_exception(e)
+                print 'ERROR linea 176'
 
     def localize_date(self, country_code, date):
         event_timezone = pytz.country_timezones(country_code)[0]
@@ -320,7 +320,16 @@ class Command(BaseCommand):
             }
         }
 
+        if payment_option.epp_tax_identifier:
+            orders_kwargs['tax_receipt']['recipient_tax_information'] = {
+                'tax_identifier_type': payment_option.epp_tax_identifier_type,
+                'tax_identifier_country': payment_option.epp_country,
+                'tax_identifier_number': payment_option.epp_tax_identifier,
+            }
+
         if not self.dry_run:
+            pass
+        else:
             self.call_service(orders_kwargs)
 
     def call_service(self, orders_kwargs):

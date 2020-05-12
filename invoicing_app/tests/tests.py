@@ -25,7 +25,7 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
     def setUp(self):
         self.options = {
             'user_id': None,
-            'dry_run': False,
+            'dry_run': True,
             'settings': None,
             'event_id': None,
             'pythonpath': None,
@@ -70,7 +70,7 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
     def test_handle_with_no_country(self):
         options = {
             'user_id': None,
-            'dry_run': False,
+            'dry_run': True,
             'settings': None,
             'event_id': None,
             'pythonpath': None,
@@ -179,7 +179,7 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
     def setUp(self):
         self.options = {
             'user_id': None,
-            'dry_run': False,
+            'dry_run': True,
             'settings': None,
             'event_id': None,
             'pythonpath': None,
@@ -245,7 +245,7 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
             event=my_event,
         )
         my_order.save()
-        self.my_command.dry_run = False
+        self.my_command.dry_run = True
         self.my_command.period_start = dt(2020, 3, 1, 0, 0)
         self.my_command.period_end = dt(2020, 4, 1, 0, 0)
         self.my_command.generate_tax_receipt_event(my_pay_opt, my_event)
@@ -284,7 +284,7 @@ class TestScriptGenerateTaxReceiptsNew(TestCase):
     def setUp(self):
         self.options = {
             'user_id': None,
-            'dry_run': False,
+            'dry_run': True,
             'settings': None,
             'event_id': None,
             'pythonpath': None,
@@ -417,7 +417,7 @@ class TestIntegration(TestCase):
     def setUp(self):
         self.options = {
             'user_id': None,
-            'dry_run': False,
+            'dry_run': True,
             'settings': None,
             'event_id': None,
             'pythonpath': None,

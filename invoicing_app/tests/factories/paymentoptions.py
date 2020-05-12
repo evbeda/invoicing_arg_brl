@@ -2,6 +2,8 @@
 from __future__ import unicode_literals
 
 import factory
+import random
+import string
 
 
 class PaymentOptionsFactory(factory.DjangoModelFactory):
@@ -16,7 +18,8 @@ class PaymentOptionsFactory(factory.DjangoModelFactory):
             'epp_address2',
             'epp_zip',
             'epp_city',
-            'epp_state'
+            'epp_state',
+            'epp_tax_identifier'
         )
 
     epp_country = 'AR'
@@ -28,3 +31,4 @@ class PaymentOptionsFactory(factory.DjangoModelFactory):
     epp_zip = ''
     epp_city = ''
     epp_state = ''
+    epp_tax_identifier = ''.join(random.choice(string.lowercase) for x in range(random.randint(11, 12)))

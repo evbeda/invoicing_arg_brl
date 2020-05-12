@@ -131,6 +131,22 @@ class PaymentOptions(models.Model):
         default='',
     )
 
+    epp_tax_identifier = models.CharField(
+        null=True,
+        max_length=255,
+    )
+
+    @property
+    def epp_tax_identifier_type(self):
+        if self.epp_country == 'BR':
+            if len(self.epp_tax_identifier) > 11:
+                return 'CNPJ'
+            else:
+                return 'CPF'
+        if self.epp_country == 'AR':
+            return 'CUIT'
+
+        return ''
 
 class Event(
     models.Model,
