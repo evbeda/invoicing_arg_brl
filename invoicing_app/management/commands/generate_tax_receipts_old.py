@@ -320,7 +320,16 @@ class Command(BaseCommand):
             }
         }
 
+        if payment_option.epp_tax_identifier:
+            orders_kwargs['tax_receipt']['recipient_tax_information'] = {
+                'tax_identifier_type': payment_option.epp_tax_identifier_type,
+                'tax_identifier_country': payment_option.epp_country,
+                'tax_identifier_number': payment_option.epp_tax_identifier,
+            }
+
         if not self.dry_run:
+            pass
+        else:
             self.call_service(orders_kwargs)
 
     def call_service(self, orders_kwargs):
