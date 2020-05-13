@@ -178,6 +178,13 @@ class Command(BaseCommand):
             )
 
         self.dry_run = options['dry_run']
+
+        if not self.dry_run:
+            from service import control
+            from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
+            from permissions.noninteractive import get_noninteractive_token
+            from eb_constants import payment_service_constants
+
         self.logger.info("------Starting generate tax receipts------")
         self.logger.info("start: {}".format(self.period_start))
         self.logger.info("end: {}".format(self.period_end))
@@ -424,9 +431,6 @@ class Command(BaseCommand):
             }
 
         if not self.dry_run:
-            from service import control
-            from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
-            from permissions.noninteractive import get_noninteractive_token
             client = control.Client('billing')
             job = client.new_job()
             auth_token = get_noninteractive_token([PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS.value])['token']
@@ -459,7 +463,6 @@ class Command(BaseCommand):
 
     def get_epp_tax_identifier_type(self, epp_country, epp_tax_identifier):
         if not self.dry_run:
-            from eb_constants import payment_service_constants
             cpf_char_count_limit = payment_service_constants.CPF_CHAR_COUNT_LIMIT
         else:
             cpf_char_count_limit = 11
