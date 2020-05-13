@@ -95,17 +95,6 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
             'No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)'
         )
 
-    def test_localize_date_old(self):
-        my_date = dt(2020, 4, 11, 0, 0)
-        self.assertEqual(
-            str(self.my_command.localize_date('AR', my_date)),
-            '2020-04-11 00:00:00-03:54'
-        )
-        self.assertEqual(
-            str(self.my_command_new.localize_date('AR', my_date)),
-            '2020-04-11 00:00:00-03:54'
-        )
-
     def test_today_date_incorrect_format(self):
         # Not a string in correct format date
         self.options['today_date'] = 'a.asd-asd??++*asd'

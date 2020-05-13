@@ -23,8 +23,9 @@ exclude_lines =
     if __name__ == '__main__':
     def suite
     if not self.dry_run:
-    def enable_logging(self):
-    def call_service(self, orders_kwargs):
-    def _log_exception(self, e, event_id=None, quiet=False):
+    def enable_logging
+    def call_service
+    def _log_exception
     if options['logging']:
     today = dt.today()
+    def localize_date

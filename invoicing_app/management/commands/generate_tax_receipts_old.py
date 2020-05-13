@@ -281,8 +281,8 @@ class Command(BaseCommand):
                     'currency': event.currency,
                 },
                 'payment_transactions_count': tax_receipt_orders['payment_transactions_count'],
-                'start_date_period': localize_start_date,
-                'end_date_period': localize_end_date,
+                'start_date_period': localize_start_date.strftime(DATE_FORMAT),
+                'end_date_period': localize_end_date.strftime(DATE_FORMAT),
                 'description': '',
                 'supplier_type': 'EVENTBRITE',
                 'supplier_name': EB_TAX_INFO['supplier_name'],
@@ -305,8 +305,8 @@ class Command(BaseCommand):
                 'recipient_region': payment_option.epp_state,
                 'tax_receipt_period_details': [{
                     'reference_type': 'ORDER',
-                    'start_date': localize_start_date,
-                    'end_date': localize_end_date,
+                    'start_date': localize_start_date.strftime(DATE_FORMAT),
+                    'end_date': localize_end_date.strftime(DATE_FORMAT),
                     'tax_rate': 0,
                     'base_amount': {
                         'value': int(tax_receipt_orders['base_amount'] * 100),
