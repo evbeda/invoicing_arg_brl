@@ -148,6 +148,11 @@ class Command(BaseCommand):
         else:
             today = dt.today()
 
+        if not self.dry_run:
+            from service import control
+            from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
+            from permissions.noninteractive import get_noninteractive_token
+
         curr_month = dt(today.year, today.month, 1)
         prev_month = curr_month - relativedelta(months=1)
         self.period_start = prev_month
@@ -424,9 +429,6 @@ class Command(BaseCommand):
             }
 
         if not self.dry_run:
-            from service import control
-            from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
-            from permissions.noninteractive import get_noninteractive_token
             client = control.Client('billing')
             job = client.new_job()
             auth_token = get_noninteractive_token([PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS.value])['token']
