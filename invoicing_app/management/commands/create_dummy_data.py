@@ -112,63 +112,55 @@ class Command(BaseCommand):
             )
 
     def insert_series_event(self, user_1):
-        event_parent_1 = EventFactory.build(
+        event_parent_1 = EventFactory.create(
             event_name='event_parent_1',
             user=user_1,
             currency='ARS'
         )
-        event_parent_1.save()
 
-        pay_opt_parent_1 = PaymentOptionsFactory.build(
+        pay_opt_parent_1 = PaymentOptionsFactory.create(
             event=event_parent_1
         )
-        pay_opt_parent_1.save()
 
         event_parent_1.series = True
         event_parent_1.repeat_schedule = ''
         event_parent_1.save()
         # --------------------------------------------- #
-        event_child_1 = EventFactory.build(
+        event_child_1 = EventFactory.create(
             event_name='event_child_1',
             user=user_1,
             event_parent=event_parent_1,
             currency='ARS'
         )
-        event_child_1.save()
 
-        order_child_1 = OrderFactory.build(
+        order_child_1 = OrderFactory.create(
             event=event_child_1,
             pp_date=self.date_in,
             changed=self.date_in,
         )
-        order_child_1.save()
         # --------------------------------------------- #
-        event_child_2 = EventFactory.build(
+        event_child_2 = EventFactory.create(
             event_name='event_child_2',
             user=user_1,
             event_parent=event_parent_1,
             currency='ARS'
         )
-        event_child_2.save()
 
-        order_child_2 = OrderFactory.build(
+        order_child_2 = OrderFactory.create(
             event=event_child_1,
             pp_date=self.date_in,
             changed=self.date_in,
         )
-        order_child_2.save()
         # --------------------------------------------- #
-        event_child_3 = EventFactory.build(
+        event_child_3 = EventFactory.create(
             event_name='event_child_3',
             user=user_1,
             event_parent=event_parent_1,
             currency='ARS'
         )
-        event_child_3.save()
 
-        order_child_3 = OrderFactory.build(
+        order_child_3 = OrderFactory.create(
             event=event_child_1,
             pp_date=str(dt(2019, 12, 8, 0, 0)),
             changed=str(dt(2019, 12, 8, 0, 0)),
         )
-        order_child_3.save()
