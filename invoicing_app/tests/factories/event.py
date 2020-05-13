@@ -6,14 +6,16 @@ class EventFactory(factory.DjangoModelFactory):
         model = 'invoicing_app.Event'
         django_get_or_create = (
             'event_name',
-            'is_series_parent',
+            'series',
             'user',
             'event_parent',
             'currency',
+            'repeat_schedule',
         )
 
     event_name = 'EVENT_1'
-    is_series_parent = False
+    series = False
     user = None
     event_parent = None
     currency = 'USD'
+    repeat_schedule = ''
