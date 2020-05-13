@@ -86,7 +86,6 @@ class Command(BaseCommand):
             )
             event_list.append(event)
 
-        for index in range(quantity):
             pay_opt = PaymentOptionsFactory.create(
                 epp_country='AR',
                 accept_eventbrite=True,
@@ -100,7 +99,6 @@ class Command(BaseCommand):
                 epp_tax_identifier=''.join(random.choice(string.lowercase) for x in range(random.randint(11, 12)))
             )
 
-        for index in range(quantity):
             order = OrderFactory.create(
                 status=100,
                 pp_date=date,
