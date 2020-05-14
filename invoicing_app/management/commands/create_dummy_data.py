@@ -1,22 +1,45 @@
 from django.core.management.base import BaseCommand, CommandError
 from optparse import make_option
 
-from invoicing_app.models import Order, PaymentOptions, User, Event
+try:
+    from invoicing_app.models import Order, PaymentOptions, User, Event
+except Exception as e:
+    from ebapps.orders.models import Order
+    from ebapps.payments.models import PaymentOptions
+    from ebapps.ebauth.models.user import User
+    from ebapps.events.models.event import Event
 
 from django.db import connection
 
 import random
 import string
 
-from invoicing_app.tests.factories.user import UserFactory
-from invoicing_app.tests.factories.event import EventFactory
-from invoicing_app.tests.factories.paymentoptions import PaymentOptionsFactory
-from invoicing_app.tests.factories.order import OrderFactory
+try:
+    from invoicing_app.tests.factories.user import UserFactory
+    from invoicing_app.tests.factories.event import EventFactory
+    from invoicing_app.tests.factories.paymentoptions import PaymentOptionsFactory
+    from invoicing_app.tests.factories.order import OrderFactory
+except Exception as e:
+    from common.factories.events_factories import EventFactory
+    from common.factories.payments_factories import EPPPaymentOptionsFactory
+    from common.factories.orders_factories import OrderFactory
+    from common.factories.ebauth_factories import UserFactory
 
 from datetime import datetime as dt
 from dateutil.relativedelta import relativedelta
 
 class Command(BaseCommand):
+
+    """
+        This is a script for create dummy data in production. Isn't performant, but
+        meets his goal.
+        Run with --clean_db for clean your db and then create dummy data
+        Run with --quantity for specify the number of objects you want to create (required)
+        This script isn't part of the project, is only for run the generate_tax_receipts_new.py
+        in a local enviroment.
+    """
+
+    help = ('Create dummy Events, Orders, Users and PaymentOptions')
 
     option_list = BaseCommand.option_list + (
         make_option(
@@ -77,33 +100,26 @@ class Command(BaseCommand):
 
         for index in range(quantity):
             event = EventFactory.create(
-                event_name='event_{}'.format(index),
-                is_series_parent=False,
+                name='event_{}'.format(index),
                 series=False,
                 user=user_test,
                 currency='ARS',
-                repeat_schedule=''
+                paymentoptions__epp_country='AR',
+                paymentoptions__epp_name_on_account='name_test',
+                paymentoptions__epp_address1='address1',
+                paymentoptions__epp_address2='addres2',
+                paymentoptions__epp_zip='5500',
+                paymentoptions__epp_city='city_test',
+                paymentoptions__epp_state='state_test',
+                paymentoptions__epp_tax_identifier='LOZG7802117B9',
             )
             event_list.append(event)
 
-            pay_opt = PaymentOptionsFactory.create(
-                epp_country='AR',
-                accept_eventbrite=True,
-                event=event_list[index],
-                epp_name_on_account='name_test',
-                epp_address1='address1',
-                epp_address2='addres2',
-                epp_zip='5500',
-                epp_city='city_test',
-                epp_state='state_test',
-                epp_tax_identifier=''.join(random.choice(string.lowercase) for x in range(random.randint(11, 12)))
-            )
-
-            order = OrderFactory.create(
+            OrderFactory.create(
                 status=100,
                 pp_date=date,
                 changed=date,
-                event=event_list[index],
+                event=event,
                 mg_fee=5.1,
                 gross=1.1,
                 eb_tax=1.1,
@@ -111,13 +127,9 @@ class Command(BaseCommand):
 
     def insert_series_event(self, user_1):
         event_parent_1 = EventFactory.create(
-            event_name='event_parent_1',
+            name='event_parent_1',
             user=user_1,
             currency='ARS'
-        )
-
-        pay_opt_parent_1 = PaymentOptionsFactory.create(
-            event=event_parent_1
         )
 
         event_parent_1.series = True
@@ -125,7 +137,7 @@ class Command(BaseCommand):
         event_parent_1.save()
         # --------------------------------------------- #
         event_child_1 = EventFactory.create(
-            event_name='event_child_1',
+            name='event_child_1',
             user=user_1,
             event_parent=event_parent_1,
             currency='ARS'
@@ -138,7 +150,7 @@ class Command(BaseCommand):
         )
         # --------------------------------------------- #
         event_child_2 = EventFactory.create(
-            event_name='event_child_2',
+            name='event_child_2',
             user=user_1,
             event_parent=event_parent_1,
             currency='ARS'
@@ -151,7 +163,7 @@ class Command(BaseCommand):
         )
         # --------------------------------------------- #
         event_child_3 = EventFactory.create(
-            event_name='event_child_3',
+            name='event_child_3',
             user=user_1,
             event_parent=event_parent_1,
             currency='ARS'
