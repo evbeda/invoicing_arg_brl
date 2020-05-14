@@ -30,3 +30,4 @@ exclude_lines =
     today = dt.today()
     def localize_date
     except Exception
+    if not EB_TAX_INFO
