@@ -8,13 +8,20 @@ import pytz
 from datetime import datetime as dt
 from dateutil.relativedelta import relativedelta
 
-# For production, comment lines: 13, 16
-# For local, comment lines. 14, 15, 17
-from invoicing import settings
-# from django.conf import settings
-# from common.management.base import BaseCommand
-from django.core.management.base import BaseCommand, CommandError
-# from django.core.management.base import CommandError
+try:
+    # Local
+    from invoicing import settings
+    from django.core.management.base import BaseCommand, CommandError
+except Exception:
+    # For production
+    from django.conf import settings
+    from common.management.base import BaseCommand
+    from django.core.management.base import CommandError
+    from service import control
+    from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
+    from permissions.noninteractive import get_noninteractive_token
+    from ebapps import payments as payment_service_constants
+    from ebgeo.timezone import tzinfo
 
 from django.db import connection
 
@@ -131,12 +138,6 @@ class Command(BaseCommand):
     def handle(self, **options):
         self.dry_run = options['dry_run']
 
-        if not self.dry_run:
-            from service import control
-            from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
-            from permissions.noninteractive import get_noninteractive_token
-            from eb_constants import payment_service_constants
-            from ebgeo.timezone import tzinfo
 
         if options['country']:
             if options['country'] not in settings.EVENTBRITE_TAX_INFORMATION:
@@ -216,21 +217,22 @@ class Command(BaseCommand):
         self.logger.info("------Ending generate tax receipts------")
 
     def _log_exception(self, e, event_id=None, quiet=False):
-        message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format
-        (
+        message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format(
             event_id,
             e.message,
             self.dry_run
         )
         if not quiet:
-            self.sentry.error('Error in generate_tax_receipts',
-                              extra={
-                                  'view': 'generate_tax_receipts',
-                                  'data': {
-                                      'exception': e,
-                                      'event': event_id,
-                                  }
-                              })
+            self.sentry.error(
+                'Error in generate_tax_receipts',
+                extra={
+                    'view': 'generate_tax_receipts',
+                    'data': {
+                        'exception': e,
+                        'event': event_id,
+                    },
+                },
+            )
             self.logger.error(message)
 
     def localize_date(self, country_code, date):
@@ -356,14 +358,16 @@ class Command(BaseCommand):
                         self.dry_run,
                     )
                 )
-
-                self.generate_tax_receipts(
-                    payment_option,
-                    event,
-                    localize_start_date,
-                    localize_end_date,
-                    tax_receipt_orders
-                )
+                try:
+                    self.generate_tax_receipts(
+                        payment_option,
+                        event,
+                        localize_start_date,
+                        localize_end_date,
+                        tax_receipt_orders
+                    )
+                except Exception as e:
+                    self._log_exception(e, event['id'])
 
     def generate_tax_receipts(
             self,
@@ -377,8 +381,8 @@ class Command(BaseCommand):
         if not EB_TAX_INFO:
             raise Exception('Cannot find EVENTBRITE_TAX_INFORMATION in settings')
         total_taxable_amount = (
-                tax_receipt_orders['total_taxable_amount_with_tax_amount'] -
-                tax_receipt_orders['total_tax_amount']
+            tax_receipt_orders['total_taxable_amount_with_tax_amount'] -
+            tax_receipt_orders['total_tax_amount']
         )
         orders_kwargs = {
             'tax_receipt': {
@@ -452,11 +456,12 @@ class Command(BaseCommand):
             job.create_tax_receipt(**orders_kwargs)
             response = client.send_job(job)
             if response.is_error():
-                raise Exception(response.error_detail)
+                raise Exception(str(response.actions[0].error_detail))
             else:
-                self.logger.info(
+                # self.logger.info(
+                print(
                     'Generated Tax Receipt: event: %i response: %s' % (
-                        event.id,
+                        event['id'],
                         response,
                     )
                 )
@@ -473,7 +478,7 @@ class Command(BaseCommand):
         self.logger.addHandler(console)
 
     def call_service(self, orders_kwargs):
-        pass
+        print(orders_kwargs)
 
     def get_epp_tax_identifier_type(self, epp_country, epp_tax_identifier):
         if not self.dry_run:
