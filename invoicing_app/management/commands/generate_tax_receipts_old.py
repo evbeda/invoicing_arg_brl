@@ -268,8 +268,8 @@ class Command(BaseCommand):
         )
         orders_kwargs = {
             'tax_receipt': {
-                'user_id': str(event.user.id * 1007),
-                'event_id': str(event.id * 1003),
+                'user_id': str(event.user.id),
+                'event_id': str(event.id),
                 'reporting_country_code': payment_option.epp_country,
                 'currency': event.currency,
                 'base_amount': {
