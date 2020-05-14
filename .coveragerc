@@ -29,3 +29,4 @@ exclude_lines =
     if options['logging']:
     today = dt.today()
     def localize_date
+    except Exception
