@@ -4,6 +4,7 @@ from __future__ import unicode_literals
 from django.test import TestCase
 
 from datetime import datetime as dt
+from time import sleep
 
 from mock import patch
 
@@ -16,6 +17,7 @@ from factories.user import UserFactory
 from factories.event import EventFactory
 from factories.paymentoptions import PaymentOptionsFactory
 from factories.order import OrderFactory
+from invoicing_app.circuitbreaker import CircuitBreaker
 
 
 class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
@@ -770,3 +772,50 @@ class TestIntegration(TestCase):
             call_old.call_count,
             call_new.call_count
         )
+
+class TestCircuitBreaker(TestCase):
+    def setUp(self):
+        def division(a, b):
+            try:
+                return a // b
+            except Exception as e:
+                raise e
+        self.circuit_breaker = CircuitBreaker(threshold=3,
+                                              timeout=1,
+                                              exception=ZeroDivisionError,
+                                              external_service=division
+                                              )
+
+    def test_service_ok(self):
+        call = self.circuit_breaker.call_external_service(2, 2)
+        self.assertEquals(self.circuit_breaker.show_state, "CLOSED")
+        self.assertEquals(call, 1)
+
+    def test_threshold_reached_and_circuit_opens(self):
+        ## Most tests use 2 0 as *args to test faulty services because 2 / 0 raises an Exception
+        self.circuit_breaker.call_external_service(2, 0)
+        self.circuit_breaker.call_external_service(2, 0)
+        self.circuit_breaker.call_external_service(2, 0)
+        self.circuit_breaker.call_external_service(2, 0)
+        self.assertEqual(self.circuit_breaker.show_state, "OPEN")
+
+    def test_half_open_state_reached(self):
+        self.circuit_breaker.call_external_service(2, 0)
+        self.circuit_breaker.call_external_service(2, 0)
+        self.circuit_breaker.call_external_service(2, 0)
+        ##Sleep time to update circuit state to HALF OPEN
+        sleep(2)
+        self.circuit_breaker.call_external_service(2, 0)
+        self.assertEquals(self.circuit_breaker.show_state, "HALF-OPEN")
+
+    def test_string_info_from_circuit_breaker(self):
+        expected_str = '''
+        Circuit Breaker info:
+        -Function registered: Division,
+        -Time since last failure: 0s,
+        -Circuit state: CLOSED,
+        -Circuit timeout: 1s,
+        -Circuit threshold: 3,
+        -Expected exception: ZeroDivisionError  
+        '''
+        self.assertEquals(str(self.circuit_breaker), expected_str)
