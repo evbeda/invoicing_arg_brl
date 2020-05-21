@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from optparse import make_option
 from invoicing_app.management.commands.generate_tax_receipts_old import Command as CommandOld
 from invoicing_app.management.commands.generate_tax_receipts_new import Command as CommandNew
+import timeit
 
 class Command(BaseCommand):
     help = ('Generate end of month tax receipts')
@@ -55,14 +56,18 @@ class Command(BaseCommand):
         self.my_command = CommandOld()
         self.my_command_new = CommandNew()
 
-        self.my_command.handle(**options_to_commands)
-        dict_old = self.my_command.get_dict_return()
-        print 'OLD SCRIPT'
-        print len(dict_old)
+        t1 = timeit.default_timer()
+        print 'NEW SCRIPT CANTIDAD'
         self.my_command_new.handle(**options_to_commands)
         dict_new = self.my_command_new.get_dict_return()
-        print 'NEW SCRIPT'
-        print len(dict_new)
+        print 'TIEMPO EN SEGUNDOS'
+        print timeit.default_timer() - t1
+        t2 = timeit.default_timer()
+        print 'OLD SCRIPT CANTIDAD'
+        self.my_command.handle(**options_to_commands)
+        dict_old = self.my_command.get_dict_return()
+        print 'TIEMPO EN SEGUNDOS'
+        print timeit.default_timer() - t2
 
         if dict_new == dict_old:
             print 'igual'
