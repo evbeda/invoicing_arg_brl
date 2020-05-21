@@ -1,8 +1,8 @@
 from django.core.management.base import BaseCommand, CommandError
-from optparse import make_option
-import logging
 from django.db import connections
 from invoicing_app.models import PaymentOptions, Event, TaxReceipt
+import logging
+from optparse import make_option
 
 
 class Command(BaseCommand):
@@ -25,7 +25,7 @@ class Command(BaseCommand):
             "recipient_city": "epp_city",
             "tax_regime_type_id": "",
         }
-        self.arg_requirements = base_requirements# + ("tax_regime_type_id",)
+        self.arg_requirements = base_requirements
         self.br_requirements = base_requirements + ("recipient_postal_code",)
         self.CPF_CHAR_COUNT_LIMIT = 11
         super(Command, self).__init__(*args, **kwargs)
@@ -86,7 +86,6 @@ class Command(BaseCommand):
     def __update_tax_receipt(self, tax_receipt):
         tax_receipt.status_id = TaxReceiptStatuses.get_id_from_name("PENDING")
         tax_receipt.save(using='billing_local', force_update=True)
-
 
     def __get_epp_tax_identifier_type(self, epp_tax_identifier): #
         if len(epp_tax_identifier) > self.CPF_CHAR_COUNT_LIMIT:
