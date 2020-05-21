@@ -21,21 +21,14 @@ class Command(BaseCommand):
         This is a temporary process that retrieve order information of Brazil events
         for generate tax receipts.
         This process will be redo at hadoop (Oozie+Hive).
-
         djmanage generate_tax_receipts --settings=settings.configuration
-
         for event:
         djmanage generate_tax_receipts --event=18388067 --settings=settings.configuration
-
         for user:
         djmanage generate_tax_receipts --user=150335768 --settings=settings.configuration
-
         use --logging to enable logger in console
-
         use --dry_run to test the command but don't update any DB or call any service
-
         use --country to process an specific country
-
     """
     help = ('Generate end of month tax receipts')
 
@@ -84,12 +77,6 @@ class Command(BaseCommand):
             default=False,
             help='specific country to process (like AR or BR)',
         ),
-        make_option(
-            '--compare',
-            dest="compare",
-            default=False,
-            help='flag to return dict for comparative',
-        ),
     )
 
     def __init__(self, *args, **kwargs):
@@ -97,8 +84,7 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
-        self.count = 0
-        self.dict_return = {}
+
         super(Command, self).__init__(*args, **kwargs)
 
     def handle(self, **options):
@@ -110,8 +96,6 @@ class Command(BaseCommand):
                 raise CommandError("Date is not matching format YYYY-MM-DD")
         else:
             today = dt.today()
-
-        self.compare = options['compare']
 
         curr_month = dt(today.year, today.month, 1)
         prev_month = curr_month - relativedelta(months=1)
@@ -149,7 +133,6 @@ class Command(BaseCommand):
         self.select_declarable_orders()
         self.logger.info("------End Generation new tax receipts------")
         self.logger.info("------Ending generate tax receipts------")
-        print self.count
 
     def select_declarable_orders(self):
         try:
@@ -183,7 +166,7 @@ class Command(BaseCommand):
                     self.generate_tax_receipt_event(payment_option, payment_option.event)
 
             except Exception as e:
-                print e.message
+                raise self._log_exception(e)
 
     def localize_date(self, country_code, date):
         event_timezone = pytz.country_timezones(country_code)[0]
@@ -342,10 +325,5 @@ class Command(BaseCommand):
         else:
             self.call_service(orders_kwargs)
 
-    def get_dict_return(self):
-        return self.dict_return
-
     def call_service(self, orders_kwargs):
-        self.count += 1
-        if self.compare:
-            self.dict_return.update({orders_kwargs['tax_receipt']['event_id']: orders_kwargs})
+        pass
