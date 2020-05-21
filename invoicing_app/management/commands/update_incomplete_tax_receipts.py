@@ -39,6 +39,7 @@ class Command(BaseCommand):
             "recipient_city": "epp_city",
             "tax_regime_type_id": "",
         }
+
         self.arg_requirements = base_requirements
         self.br_requirements = base_requirements + ("recipient_postal_code",)
         self.CPF_CHAR_COUNT_LIMIT = 11
@@ -160,7 +161,7 @@ class Command(BaseCommand):
             self.logger.info("Tax receipt with id:{} updated succesfully"
                              .format(tax_receipt.id))
 
-    def _get_epp_tax_identifier_type(self, epp_tax_identifier):  #
+    def __get_epp_tax_identifier_type(self, epp_tax_identifier): #
         if len(epp_tax_identifier) > self.CPF_CHAR_COUNT_LIMIT:
             return 'CNPJ'
         else:
