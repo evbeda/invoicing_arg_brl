@@ -57,6 +57,7 @@ class Migration(migrations.Migration):
                 ('epp_zip', models.CharField(default='', max_length=10)),
                 ('epp_city', models.CharField(default='', max_length=150)),
                 ('epp_state', models.CharField(default='', max_length=30)),
+                ('epp_tax_identifier', models.CharField(max_length=255, null=True)),
                 ('event', models.OneToOneField(related_name='_paymentoptions', on_delete=django.db.models.deletion.DO_NOTHING, db_column='event', to='invoicing_app.Event')),
             ],
             options={
