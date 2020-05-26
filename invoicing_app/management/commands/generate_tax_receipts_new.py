@@ -24,8 +24,10 @@ except Exception:
     from ebgeo.timezone import tzinfo
 
 from django.db import connection
+from invoicing_app.slack_module import SlackConnection
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+SLACK_API_TOKEN = 'xoxb-1169167404752-1169450015440-cdlKpRLrFH98ChgfLd8RtbZy'
 
 
 class Command(BaseCommand):
@@ -97,6 +99,7 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
+        self.error_messages = []
         self.query = '''
                     SELECT
                         `Orders`.`event` as `event_id`,
@@ -133,6 +136,13 @@ class Command(BaseCommand):
                         `event_id`
                     ORDER BY NULL
                 '''
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('--- %(name)s - %(levelname)s - %(message)s ---')
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
         super(Command, self).__init__(*args, **kwargs)
 
     def handle(self, **options):
@@ -167,7 +177,7 @@ class Command(BaseCommand):
         self.period_end = curr_month
 
         if options['logging']:
-            self.enable_logging()
+            self.logger = logging.getLogger(__name__)
 
         if options['event_id']:
             self.event_id = options['event_id']
@@ -206,6 +216,14 @@ class Command(BaseCommand):
             'status_query': 100,
         }
 
+        self._send_slack_notification_message(
+            """
+            The generation script has started.
+            Country: {}
+            Start date: {}
+            End date: {}
+            """.format(options['country'], localize_start_date, localize_end_date)
+        )
         self.logger.info("------Starting generate tax receipts------")
         self.logger.info("start: {}".format(self.period_start))
         self.logger.info("end: {}".format(self.period_end))
@@ -213,6 +231,13 @@ class Command(BaseCommand):
         self.get_and_iterate_child_events(query_options)
         self.logger.info("------End Generation new tax receipts------")
         self.logger.info("------Ending generate tax receipts------")
+        if len(self.error_messages) >= 1:
+            to_send = '\n'.join(self.error_messages)
+            self._send_slack_notification_message(
+                'The generation script ran with the next errors:\n{}'.format(to_send)
+            )
+        else:
+            self._send_slack_notification_message('The generation script ran successfully')
 
     def _log_exception(self, e, event_id=None, quiet=False):
         message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format(
@@ -220,6 +245,7 @@ class Command(BaseCommand):
             e.message,
             self.dry_run
         )
+        self.error_messages.append(message)
         if not quiet:
             self.sentry.error(
                 'Error in generate_tax_receipts',
@@ -456,8 +482,7 @@ class Command(BaseCommand):
             if response.is_error():
                 raise Exception(str(response.actions[0].error_detail))
             else:
-                # self.logger.info(
-                print(
+                self.logger.info(
                     'Generated Tax Receipt: event: %i response: %s' % (
                         event['id'],
                         response,
@@ -476,7 +501,7 @@ class Command(BaseCommand):
         self.logger.addHandler(console)
 
     def call_service(self, orders_kwargs):
-        print(orders_kwargs)
+        pass
 
     def get_epp_tax_identifier_type(self, epp_country, epp_tax_identifier):
         if not self.dry_run:
@@ -493,3 +518,8 @@ class Command(BaseCommand):
             return 'CUIT'
 
         return ''
+
+    def _send_slack_notification_message(self, message):
+        slack = SlackConnection(token=SLACK_API_TOKEN)
+        channel = '#invoicing_arg_brl'
+        slack.post_message(channel, message)
