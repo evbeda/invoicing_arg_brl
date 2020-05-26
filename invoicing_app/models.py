@@ -148,6 +148,7 @@ class PaymentOptions(models.Model):
 
         return ''
 
+
 class Event(
     models.Model,
     SeriesEventModelMixin
@@ -201,5 +202,3 @@ class User(models.Model):
         managed = True
         db_table = 'Users'
     first_name = models.CharField(max_length=50)
-
-
