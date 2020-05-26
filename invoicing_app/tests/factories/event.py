@@ -1,5 +1,4 @@
 import factory
-from user import UserFactory
 
 
 class EventFactory(factory.DjangoModelFactory):
@@ -14,9 +13,9 @@ class EventFactory(factory.DjangoModelFactory):
             'repeat_schedule',
         )
 
-    event_name = 'event_test'
+    event_name = 'EVENT_1'
     series = False
-    user = UserFactory.create()
+    user = None
     event_parent = None
-    currency = 'ARS'
+    currency = 'USD'
     repeat_schedule = ''
