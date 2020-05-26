@@ -10,6 +10,7 @@ omit =
     invoicing_app/models.py
     invoicing_app/management/commands/generate_tax_receipts_old.py
     invoicing_app/management/commands/create_dummy_data.py
+    invoicing_app/tests/factories/tax_receipts.py
     invoicing/*
     manage.py
 
