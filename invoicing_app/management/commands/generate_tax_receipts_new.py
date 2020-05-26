@@ -27,6 +27,7 @@ from django.db import connection
 from invoicing_app.slack_module import SlackConnection
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+# Token for a test channel in a test workspace
 SLACK_API_TOKEN = 'xoxb-1169167404752-1169450015440-cdlKpRLrFH98ChgfLd8RtbZy'
 
 
