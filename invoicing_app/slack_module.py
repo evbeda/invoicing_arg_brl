@@ -1,5 +1,8 @@
 import requests
 
+SLACK_API_ENDPOINT_POST = 'https://slack.com/api/chat.postMessage'
+
+
 channels = {
     '#invoicing_arg_brl': 'C014Z5CFCHW',
 }
