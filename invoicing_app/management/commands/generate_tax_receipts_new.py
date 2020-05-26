@@ -99,7 +99,7 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
-        self.error_messages = []
+        self.error_cont = 0
         self.query = '''
                     SELECT
                         `Orders`.`event` as `event_id`,
@@ -231,13 +231,9 @@ class Command(BaseCommand):
         self.get_and_iterate_child_events(query_options)
         self.logger.info("------End Generation new tax receipts------")
         self.logger.info("------Ending generate tax receipts------")
-        if len(self.error_messages) >= 1:
-            to_send = '\n'.join(self.error_messages)
-            self._send_slack_notification_message(
-                'The generation script ran with the next errors:\n{}'.format(to_send)
-            )
-        else:
-            self._send_slack_notification_message('The generation script ran successfully')
+        self._send_slack_notification_message(
+            'The generation script ran successfully with {} errors'.format(self.error_cont)
+        )
 
     def _log_exception(self, e, event_id=None, quiet=False):
         message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format(
@@ -245,7 +241,7 @@ class Command(BaseCommand):
             e.message,
             self.dry_run
         )
-        self.error_messages.append(message)
+        self.error_cont = self.error_cont + 1
         if not quiet:
             self.sentry.error(
                 'Error in generate_tax_receipts',
