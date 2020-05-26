@@ -8,33 +8,26 @@ import pytz
 from datetime import datetime as dt
 from dateutil.relativedelta import relativedelta
 
-try:
-    # Local
-    from invoicing import settings
-    from django.core.management.base import BaseCommand, CommandError
-except Exception:
-    # For production
-    from django.conf import settings
-    from common.management.base import BaseCommand
-    from django.core.management.base import CommandError
-    from service import control
-    from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
-    from permissions.noninteractive import get_noninteractive_token
-    from ebapps import payments as payment_service_constants
-    from ebgeo.timezone import tzinfo
+from django.conf import settings
+from common.management.base import BaseCommand
+from django.core.management.base import CommandError
+from service import control
+from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
+from permissions.noninteractive import get_noninteractive_token
+from ebapps import payments as payment_service_constants
+from ebgeo.timezone import tzinfo
 
-from django.db import connection
+from django.db import connections
+
+from common.utils.slack import SlackConnection
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
 
 class Command(BaseCommand):
     """
-        This is a temporary process that retrieve order information of Brazil events
-        for generate tax receipts.
-        This process will be redo at hadoop (Oozie+Hive).
-
-        djmanage generate_tax_receipts --settings=settings.configuration
+        This script generate tax_receitps for a month. It's used in Argentina and Brazil.
+        It was developed by EDA!
 
         for event:
         djmanage generate_tax_receipts --event=18388067 --settings=settings.configuration
@@ -46,7 +39,9 @@ class Command(BaseCommand):
 
         use --dry_run to test the command but don't update any DB or call any service
 
-        use --country to process an specific country
+        use --country to process an specific country (required)
+
+        use --date to run the proccess for a specific date
 
     """
     help = ('Generate end of month tax receipts')
@@ -205,7 +200,18 @@ class Command(BaseCommand):
             'declarable_tax_receipt_countries_query': self.declarable_tax_receipt_countries,
             'status_query': 100,
         }
-
+        self._send_slack_notification_message(
+            """
+            The generation script started to run:
+            Country: {}
+            Start date: {}
+            End date: {}
+            """.format(
+                self.declarable_tax_receipt_countries,
+                localize_start_date,
+                localize_end_date
+            )
+        )
         self.logger.info("------Starting generate tax receipts------")
         self.logger.info("start: {}".format(self.period_start))
         self.logger.info("end: {}".format(self.period_end))
@@ -213,6 +219,7 @@ class Command(BaseCommand):
         self.get_and_iterate_child_events(query_options)
         self.logger.info("------End Generation new tax receipts------")
         self.logger.info("------Ending generate tax receipts------")
+        self._send_slack_notification_message('The generation script ran successfully')
 
     def _log_exception(self, e, event_id=None, quiet=False):
         message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format(
@@ -234,22 +241,13 @@ class Command(BaseCommand):
             self.logger.error(message)
 
     def localize_date(self, country_code, date):
-        if not self.dry_run:
-            event_timezone = pytz.country_timezones(country_code)[0]
-            return dt(
-                year=date.year,
-                month=date.month,
-                day=date.day,
-                tzinfo=pytz.timezone(event_timezone)
-            ).astimezone(tzinfo.get_default_tzinfo()).replace(tzinfo=None)
-        else:
-            event_timezone = pytz.country_timezones(country_code)[0]
-            return dt(
-                year=date.year,
-                month=date.month,
-                day=date.day,
-                tzinfo=pytz.timezone(event_timezone)
-            )
+        event_timezone = pytz.country_timezones(country_code)[0]
+        return dt(
+            year=date.year,
+            month=date.month,
+            day=date.day,
+            tzinfo=pytz.timezone(event_timezone)
+        ).astimezone(tzinfo.get_default_tzinfo()).replace(tzinfo=None)
 
     def get_and_iterate_no_series_events(self, query_options):
         # Replace of PARENT_CHILD_MASK for the no-series condition in INNER JOIN
@@ -296,7 +294,7 @@ class Command(BaseCommand):
     def get_query_results(self, query_options):
         query_results = []
 
-        with connection.cursor() as cursor:
+        with connections['slave'].cursor() as cursor:
             cursor.execute(
                 self.query,
                 query_options
@@ -456,15 +454,14 @@ class Command(BaseCommand):
             if response.is_error():
                 raise Exception(str(response.actions[0].error_detail))
             else:
-                # self.logger.info(
-                print(
+                self.logger.info(
                     'Generated Tax Receipt: event: %i response: %s' % (
                         event['id'],
                         response,
                     )
                 )
         else:
-            self.call_service(orders_kwargs)
+            pass
 
     def enable_logging(self):
         console = logging.StreamHandler()
@@ -474,9 +471,6 @@ class Command(BaseCommand):
         )
         console.setFormatter(formatter)
         self.logger.addHandler(console)
-
-    def call_service(self, orders_kwargs):
-        print(orders_kwargs)
 
     def get_epp_tax_identifier_type(self, epp_country, epp_tax_identifier):
         if not self.dry_run:
@@ -493,3 +487,8 @@ class Command(BaseCommand):
             return 'CUIT'
 
         return ''
+
+    def _send_slack_notification_message(self, message):
+        slack = SlackConnection(token=settings.SLACK_ADMINAPP_TOKEN)
+        channel = '#eda_invoicing_ar_br'
+        slack.post_message(channel, message)
