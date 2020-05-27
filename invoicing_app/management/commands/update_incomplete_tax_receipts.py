@@ -1,4 +1,4 @@
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.db import connections
 from invoicing_app.models import PaymentOptions, Event, TaxReceipt
 import logging
@@ -19,8 +19,7 @@ class Command(BaseCommand):
             '--dry_run',
             dest='dry_run',
             action='store_true',
-            help='Run script against QA without writing to DB, if this arg is not used it will run against localhost'
-                 ', this option also uses the --verbose arg as well',
+            help='Run script against QA without writing to DB, if this arg is not used it will run against localhost',
         ),
     )
 
@@ -43,12 +42,12 @@ class Command(BaseCommand):
         self.arg_requirements = base_requirements
         self.br_requirements = base_requirements + ("recipient_postal_code",)
         self.CPF_CHAR_COUNT_LIMIT = 11
-        self.configure_logger()
+        self.__configure_logger()
         self.logger = logging.getLogger(__name__)
         self.verbose = False
         self.dry_run = False
         self.invoicing = 'default'
-        self.billing = 'default'
+        self.billing = 'billing_local'
         self.count = 0
         super(Command, self).__init__(*args, **kwargs)
 
@@ -75,11 +74,11 @@ class Command(BaseCommand):
 
     def find_incomplete_tax_receipts(self):
         try:
-            self.tax_receipts = TaxReceipt.objects.using(self.billing) \
+            self.tax_receipts = TaxReceipt.objects.using(self.billing)\
                 .filter(
                 status_id=TaxReceiptStatuses.get_id_from_name("INCOMPLETE"),
                 reporting_country_code__in=['AR', 'BR'],
-            ).iterator()
+                ).iterator()
         except Exception as e:
             self.__log_exception(e)
             raise e
@@ -93,7 +92,7 @@ class Command(BaseCommand):
                 else:
                     self._check_BR_requirements(tax_receipt, po)
             except Exception as e:
-                self.__log_exception(e)
+                self.__log_exception(e, txr_id=tax_receipt.id, evnt_id=tax_receipt.event_id)
 
     def _check_ARG_requirements(self, tax_receipt, payment_option):
         # IF ONE FIELD FAILS CHECK REQUIREMENTS, WE CANT CHANGE TO 'PENDING' STATUS
@@ -168,20 +167,16 @@ class Command(BaseCommand):
             return 'CPF'
         return ''
 
-    def configure_logger(self):
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('--- %(name)s - %(levelname)s - %(message)s ---')
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
 
-    def __log_exception(self, e, po_id=None):
+    def __log_exception(self, e, txr_id=None, evnt_id=None):
+        if txr_id:
+            self.logger.error('''Tax Receipt with id:{} failed.
+                                 Couldn't find associated Payment Option through the TaxReceipt.event={}'''
+                              .format(txr_id, evnt_id))
         self.logger.error(e.message)
 
     def _log_due_to_missing_to_info(self, tax_id, po_id, requirement, po_attribute):
-        self.logger. \
+        self.logger.\
             info('''
                     Couldn't update status of tax receipt with id: {} to PENDING,
                     due to missing information on its associated payment option with id: {}.
@@ -194,14 +189,22 @@ class Command(BaseCommand):
                  )
 
     def __log_hosts_being_used(self):
-        self.logger.info("Using Host name: {}, Database name: {}".format(
-            connections.databases[self.invoicing]['HOST'],
-            connections.databases[self.invoicing]['NAME'])
-        )
-        self.logger.info("Using Host name: {}, Database name: {}".format(
-            connections.databases[self.billing]['HOST'],
-            connections.databases[self.billing]['NAME'])
-        )
+        for db in (self.invoicing, self.billing):
+            self.logger.info("Using {}. Host name: {}, Database name: {}".format(
+                    db,
+                    connections.databases[db]['HOST'],
+                    connections.databases[db]['NAME']
+                )
+            )
+
+    def __configure_logger(self):
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('--- %(name)s - %(levelname)s - %(message)s ---')
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
 
 
 class TaxReceiptStatuses:

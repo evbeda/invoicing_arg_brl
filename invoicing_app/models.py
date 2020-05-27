@@ -33,6 +33,7 @@ STATUS_CHOICES = (
     (ORDER_DELETED, 'Deleted'),
 )
 
+
 class SeriesEventModelMixin(object):
 
     @property
@@ -43,8 +44,8 @@ class SeriesEventModelMixin(object):
     def is_series_parent(self):
         return self.is_series and self.event_parent_id is None
 
-class Order(models.Model):
 
+class Order(models.Model):
     class Meta:
         managed = True
         db_table = 'Orders'
@@ -153,7 +154,6 @@ class Event(
     models.Model,
     SeriesEventModelMixin
 ):
-
     class Meta:
         managed = True
         db_table = 'Events'
@@ -201,6 +201,7 @@ class User(models.Model):
     class Meta:
         managed = True
         db_table = 'Users'
+
     first_name = models.CharField(max_length=50)
 
 
@@ -241,4 +242,3 @@ class TaxReceipt(models.Model):
 
     class Meta:
         db_table = "Tax_Receipts"
-        managed = False
