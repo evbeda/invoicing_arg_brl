@@ -62,6 +62,7 @@ class Command(BaseCommand):
 
         if self.verbose:
             self._log_hosts_being_used()
+
         self.logger.info("Finding tax receipts that meet requirements criteria")
         self.find_incomplete_tax_receipts()
         self.update_tax_receipts_that_met_requirements()
@@ -150,7 +151,7 @@ class Command(BaseCommand):
     def __check_single_requirement(self, po_attr):
         return po_attr != ''
 
-    def _update_tax_receipt(self, tax_receipt):
+    def __update_tax_receipt(self, tax_receipt):
         if self.verbose:
             self.logger.info("Tax receipt with id:{} met every requirement."
                              .format(tax_receipt.id))
@@ -188,6 +189,44 @@ class Command(BaseCommand):
                  )
 
     def _log_hosts_being_used(self):
+        for db in (self.invoicing, self.billing):
+            self.logger.info("Using {}. Host name: {}, Database name: {}".format(
+                    db,
+                    connections.databases[db]['HOST'],
+                    connections.databases[db]['NAME']
+                )
+            )
+
+    def __configure_logger(self):
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        formatter = logging.Formatter('--- %(name)s - %(levelname)s - %(message)s ---')
+        ch.setFormatter(formatter)
+        logger.addHandler(ch)
+
+    def __log_exception(self, e, txr_id=None, evnt_id=None):
+        if txr_id:
+            self.logger.error('''Tax Receipt with id:{} failed.
+                                 Couldn't find associated Payment Option through the TaxReceipt.event={}'''
+                              .format(txr_id, evnt_id))
+        self.logger.error(e.message)
+
+    def __log_due_to_missing_to_info(self, tax_id, po_id, requirement, po_attribute):
+        self.logger.\
+            info('''
+                    Couldn't update status of tax receipt with id: {} to PENDING,
+                    due to missing information on its associated payment option with id: {}.
+                    The field that failed is PaymentOption.{} 
+                    Its value is: '{}', and it needs to be completed'''
+                 .format(tax_id,
+                         po_id,
+                         requirement,
+                         po_attribute)
+                 )
+
+    def __log_hosts_being_used(self):
         for db in (self.invoicing, self.billing):
             self.logger.info("Using {}. Host name: {}, Database name: {}".format(
                     db,
