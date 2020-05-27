@@ -4,8 +4,6 @@ from __future__ import unicode_literals
 import factory
 import random
 from datetime import datetime as dt
-from event import EventFactory
-from user import UserFactory
 
 
 class TaxReceiptsFactory(factory.DjangoModelFactory):
@@ -46,8 +44,8 @@ class TaxReceiptsFactory(factory.DjangoModelFactory):
             'supplier_tax_identifier_number',
             'supplier_tax_identifier_country_code',
         )
-    user_id = UserFactory.create().id
-    event_id = EventFactory.create().id
+    user_id = ''
+    event_id = ''
     reporting_country_code = random.choice(['AR', 'BR'])
     if reporting_country_code == 'AR':
         currency = 'ARS'

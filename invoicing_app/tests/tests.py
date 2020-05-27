@@ -839,10 +839,14 @@ class TestUpdateTaxReceipts(TestCase):
             'dry_run': False,
         }
 
-        self.event = EventFactory.create()
+        self.user = UserFactory.create()
+        self.event = EventFactory.create(
+            user=self.user,
+        )
 
         self.tax_receipt = TaxReceiptsFactory.create(
-            event_id=self.event.id
+            event_id=self.event.id,
+            user_id=self.user.id,
         )
 
         self.payment_options = PaymentOptionsFactory.create(
