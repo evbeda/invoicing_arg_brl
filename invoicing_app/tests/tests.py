@@ -383,11 +383,11 @@ class TestScriptGenerateTaxReceiptsNew(TestCase):
             '(`Events`.`id` = `Payment_Options`.`event`)'
         )
         returns_one_element = 1
-        self.assertEqual(
-            str(type(self.my_command_new.get_query_results(
+        self.assertIsInstance(
+            self.my_command_new.get_query_results(
                 query_options_test, self.my_command_new.query
-            ))),
-            "<type 'list'>"
+            ),
+            list
         )
         self.assertEqual(
             len(self.my_command_new.get_query_results(
