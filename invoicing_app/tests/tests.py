@@ -329,7 +329,7 @@ class TestScriptGenerateTaxReceiptsNew(TestCase):
             'status_query': 100,
         }
         self.my_command_new.query = self.my_command_new.query.replace(
-            'CONDITION_MASK',
+            '{condition_mask}',
             ''
         )
         self.my_command_new.get_and_iterate_no_series_events(query_options_test)
@@ -358,7 +358,7 @@ class TestScriptGenerateTaxReceiptsNew(TestCase):
             'status_query': 100,
         }
         self.my_command_new.query = self.my_command_new.query.replace(
-            'CONDITION_MASK',
+            '{condition_mask}',
             ''
         )
         self.my_command_new.get_and_iterate_child_events(query_options_test)
@@ -384,11 +384,11 @@ class TestScriptGenerateTaxReceiptsNew(TestCase):
             'status_query': 100,
         }
         self.my_command_new.query = self.my_command_new.query.replace(
-            'CONDITION_MASK',
+            '{condition_mask}',
             ''
         )
         self.my_command_new.query = self.my_command_new.query.replace(
-            'PARENT_CHILD_MASK',
+            '{parent_child_mask}',
             '(`Events`.`id` = `Payment_Options`.`event`)'
         )
         returns_one_element = 1

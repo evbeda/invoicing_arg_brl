@@ -113,7 +113,7 @@ class Command(BaseCommand):
                         SUM(`Orders`.`gross`) AS `base_amount`
                     FROM `Orders`
                         INNER JOIN `Events` ON (`Orders`.`event` = `Events`.`id` )
-                        INNER JOIN `Payment_Options` ON PARENT_CHILD_MASK
+                        INNER JOIN `Payment_Options` ON {parent_child_mask}
                     WHERE (
                         `Orders`.`status` = %(status_query)s AND
                         `Orders`.`pp_date` <= %(localize_end_date_query)s AND
@@ -123,7 +123,7 @@ class Command(BaseCommand):
                         `Orders`.`pp_date` >= %(localize_start_date_query)s AND
                         `Payment_Options`.`accept_eventbrite` = 1 AND
                         `Payment_Options`.`epp_country` = %(declarable_tax_receipt_countries_query)s
-                        CONDITION_MASK
+                        {condition_mask}
                     )
                     GROUP BY
                         `event_id`
@@ -174,8 +174,7 @@ class Command(BaseCommand):
             self.conditional_mask = 'AND `Events`.`uid` = ' + str(self.user_id)
 
         # The self.conditional_mask is put into the query
-        self.query = self.query.replace('CONDITION_MASK', '{}')
-        self.query = self.query.format(self.conditional_mask)
+        self.query = self.query.format(condition_mask=self.conditional_mask, parent_child_mask='{parent_child_mask}')
 
         localize_start_date = self.localize_date(
             self.declarable_tax_receipt_countries,
@@ -243,8 +242,7 @@ class Command(BaseCommand):
 
     def get_and_iterate_no_series_events(self, query_options):
         parent_mask = '(`Events`.`id` = `Payment_Options`.`event`)'
-        query = self.query.replace('PARENT_CHILD_MASK', '{}')
-        query = query.format(parent_mask)
+        query = self.query.format(parent_child_mask=parent_mask)
         query_results = self.get_query_results(query_options, query)
         self.iterate_querys_results(
             query_results,
@@ -254,8 +252,7 @@ class Command(BaseCommand):
 
     def get_and_iterate_child_events(self, query_options):
         child_mask = '(`Events`.`event_parent` = `Payment_Options`.`event`)'
-        query = self.query.replace('PARENT_CHILD_MASK', '{}')
-        query = query.format(child_mask)
+        query = self.query.format(parent_child_mask=child_mask)
         query_results = self.get_query_results(query_options, query)
         self.iterate_querys_results(
             query_results,
