@@ -167,11 +167,11 @@ class Command(BaseCommand):
 
         if options['event_id']:
             self.event_id = options['event_id']
-            self.conditional_mask = 'AND `Events`.`id` = ' + str(self.event_id)
+            self.conditional_mask = 'AND `Events`.`id` = {}'.format(self.event_id)
 
         if options['user_id']:
             self.user_id = options['user_id']
-            self.conditional_mask = 'AND `Events`.`uid` = ' + str(self.user_id)
+            self.conditional_mask = 'AND `Events`.`uid` = {}'.format(self.user_id)
 
         # The self.conditional_mask is put into the query
         self.query = self.query.format(condition_mask=self.conditional_mask, parent_child_mask='{parent_child_mask}')
