@@ -835,7 +835,7 @@ class TestUpdateTaxReceipts(TestCase):
     def setUp(self):
         self.command = UpdateIncompleteCommand()
         self.options = {
-            'verbose': True,
+            'verbose': False,
             'dry_run': False,
         }
 
@@ -847,6 +847,7 @@ class TestUpdateTaxReceipts(TestCase):
         self.tax_receipt = TaxReceiptsFactory.create(
             event_id=self.event.id,
             user_id=self.user.id,
+            status_id=1
         )
 
         self.payment_options = PaymentOptionsFactory.create(
@@ -1090,3 +1091,27 @@ class TestUpdateTaxReceipts(TestCase):
             self.payment_options.id
         )
 
+    @patch(
+        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._log_hosts_being_used',
+    )
+    def test_update_incomplete_tax_receipt_handle_dry_run(self, log_hosts_being_used):
+        country = 'BR'
+        self.tax_receipt.reporting_country_code = country
+        self.tax_receipt.save()
+
+        self.payment_options.epp_country = country
+        self.payment_options.epp_address1 = 'address1'
+        self.payment_options.epp_name_on_account = 'epp_name_on_account'
+        self.payment_options.epp_zip = '2132'
+        self.payment_options.epp_city = 'city'
+        self.payment_options.epp_state = 'state'
+        self.payment_options.epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(11))
+        self.payment_options.save()
+
+        self.command.billing = 'default'
+        self.command.handle(**self.options)
+
+        self.assertEqual(
+            self.command.count,
+            1
+        )

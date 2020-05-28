@@ -60,7 +60,7 @@ class Command(BaseCommand):
             self.billing = 'billing_EB'
 
         if self.verbose:
-            self.__log_hosts_being_used()
+            self._log_hosts_being_used()
         self.logger.info("Finding tax receipts that meet requirements criteria")
         self.find_incomplete_tax_receipts()
         self.update_tax_receipts_that_met_requirements()
@@ -80,7 +80,7 @@ class Command(BaseCommand):
                 reporting_country_code__in=['AR', 'BR'],
                 ).iterator()
         except Exception as e:
-            self.__log_exception(e)
+            self._log_exception(e)
             raise e
 
     def update_tax_receipts_that_met_requirements(self):
@@ -92,7 +92,7 @@ class Command(BaseCommand):
                 else:
                     self._check_BR_requirements(tax_receipt, po)
             except Exception as e:
-                self.__log_exception(e, txr_id=tax_receipt.id, evnt_id=tax_receipt.event_id)
+                self._log_exception(e, txr_id=tax_receipt.id, evnt_id=tax_receipt.event_id)
 
     def _check_ARG_requirements(self, tax_receipt, payment_option):
         # IF ONE FIELD FAILS CHECK REQUIREMENTS, WE CANT CHANGE TO 'PENDING' STATUS
@@ -114,7 +114,7 @@ class Command(BaseCommand):
 
     def _check_BR_requirements(self, tax_receipt, payment_option):
         # CHECK IF BR TAX AUTHORITY IS CPNJ OR CPF, BECAUSE THEY USE DIFFERENT REQUIREMENTS.
-        if self.__get_epp_tax_identifier_type(payment_option.epp_tax_identifier) == 'CNPJ':
+        if self._get_epp_tax_identifier_type(payment_option.epp_tax_identifier) == 'CNPJ':
             for requirement in self.br_requirements + ('recipient_city',):
                 po_attribute = getattr(payment_option, str(self.tax_to_po_requirement_dict.get(requirement)), '')
                 if self.__check_single_requirement(po_attribute):
@@ -130,7 +130,7 @@ class Command(BaseCommand):
                     return
             self._update_tax_receipt(tax_receipt)
 
-        elif self.__get_epp_tax_identifier_type(payment_option.epp_tax_identifier) == 'CPF':
+        elif self._get_epp_tax_identifier_type(payment_option.epp_tax_identifier) == 'CPF':
             for requirement in self.br_requirements:
                 po_attribute = getattr(payment_option, str(self.tax_to_po_requirement_dict.get(requirement)), '')
                 if self.__check_single_requirement(po_attribute):
@@ -160,15 +160,13 @@ class Command(BaseCommand):
             self.logger.info("Tax receipt with id:{} updated succesfully"
                              .format(tax_receipt.id))
 
-    def __get_epp_tax_identifier_type(self, epp_tax_identifier):  #
+    def _get_epp_tax_identifier_type(self, epp_tax_identifier):  #
         if len(epp_tax_identifier) > self.CPF_CHAR_COUNT_LIMIT:
             return 'CNPJ'
         else:
             return 'CPF'
-        return ''
 
-
-    def __log_exception(self, e, txr_id=None, evnt_id=None):
+    def _log_exception(self, e, txr_id=None, evnt_id=None):
         if txr_id:
             self.logger.error('''Tax Receipt with id:{} failed.
                                  Couldn't find associated Payment Option through the TaxReceipt.event={}'''
@@ -188,7 +186,7 @@ class Command(BaseCommand):
                          po_attribute)
                  )
 
-    def __log_hosts_being_used(self):
+    def _log_hosts_being_used(self):
         for db in (self.invoicing, self.billing):
             self.logger.info("Using {}. Host name: {}, Database name: {}".format(
                     db,
