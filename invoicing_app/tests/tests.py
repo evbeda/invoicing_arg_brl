@@ -138,10 +138,6 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
             self.my_command_new.event_id,
             self.options['event_id']
         )
-        self.assertIn(
-            'AND `Events`.`id` = {}'.format(self.options['event_id']),
-            self.my_command_new.query
-        )
 
     def test_user_id_option(self):
         self.options['user_id'] = '1'
@@ -157,11 +153,6 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
             self.my_command_new.user_id,
             self.options['user_id']
         )
-        self.assertIn(
-            'AND `Events`.`uid` = {}'.format(self.options['user_id']),
-            self.my_command_new.query
-        )
-
 
 class TestScriptGenerateTaxReceiptsOld(TestCase):
     """

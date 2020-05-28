@@ -173,9 +173,6 @@ class Command(BaseCommand):
             self.user_id = options['user_id']
             self.conditional_mask = 'AND `Events`.`uid` = {}'.format(self.user_id)
 
-        # The self.conditional_mask is put into the query
-        self.query = self.query.format(condition_mask=self.conditional_mask, parent_child_mask='{parent_child_mask}')
-
         localize_start_date = self.localize_date(
             self.declarable_tax_receipt_countries,
             self.period_start
@@ -242,7 +239,7 @@ class Command(BaseCommand):
 
     def get_and_iterate_no_series_events(self, query_options):
         parent_mask = '(`Events`.`id` = `Payment_Options`.`event`)'
-        query = self.query.format(parent_child_mask=parent_mask)
+        query = self.query.format(condition_mask=self.conditional_mask, parent_child_mask=parent_mask)
         query_results = self.get_query_results(query_options, query)
         self.iterate_querys_results(
             query_results,
@@ -252,7 +249,7 @@ class Command(BaseCommand):
 
     def get_and_iterate_child_events(self, query_options):
         child_mask = '(`Events`.`event_parent` = `Payment_Options`.`event`)'
-        query = self.query.format(parent_child_mask=child_mask)
+        query = self.query.format(condition_mask=self.conditional_mask, parent_child_mask=child_mask)
         query_results = self.get_query_results(query_options, query)
         self.iterate_querys_results(
             query_results,
