@@ -166,24 +166,15 @@ class Command(BaseCommand):
 
         if options['event_id']:
             self.event_id = options['event_id']
-            self.query = self.query.replace(
-                'CONDITION_MASK',
-                'AND `Events`.`id` = ' + str(self.event_id)
-            )
+            self.conditional_mask = 'AND `Events`.`id` = ' + str(self.event_id)
 
         if options['user_id']:
             self.user_id = options['user_id']
-            self.query = self.query.replace(
-                'CONDITION_MASK',
-                'AND `Events`.`uid` = ' + str(self.user_id)
-            )
+            self.conditional_mask = 'AND `Events`.`uid` = ' + str(self.user_id)
 
-        # If there isn't condition, remove the CONDITION MASK from the query
-        if (not options['user_id']) and (not options['event_id']):
-            self.query = self.query.replace(
-                'CONDITION_MASK',
-                ''
-            )
+        # The self.conditional_mask is put into the query
+        self.query = self.query.replace('CONDITION_MASK', '{}')
+        self.query = self.query.format(self.conditional_mask)
 
         localize_start_date = self.localize_date(
             self.declarable_tax_receipt_countries,
@@ -250,53 +241,33 @@ class Command(BaseCommand):
         ).astimezone(tzinfo.get_default_tzinfo()).replace(tzinfo=None)
 
     def get_and_iterate_no_series_events(self, query_options):
-        # Replace of PARENT_CHILD_MASK for the no-series condition in INNER JOIN
-        self.query = self.query.replace(
-            'PARENT_CHILD_MASK',
-            '(`Events`.`id` = `Payment_Options`.`event`)'
-        )
-        query_results = self.get_query_results(query_options)
+        parent_mask = '(`Events`.`id` = `Payment_Options`.`event`)'
+        query = self.query.replace('PARENT_CHILD_MASK', '{}')
+        query = query.format(parent_mask)
+        query_results = self.get_query_results(query_options, query)
         self.iterate_querys_results(
             query_results,
             query_options['localize_start_date_query'],
             query_options['localize_end_date_query'],
-        )
-        # Undo the replacing of PARENT_CHILD_MASK for the child events
-        self.query = self.query.replace(
-            '(`Events`.`id` = `Payment_Options`.`event`)',
-            'PARENT_CHILD_MASK'
         )
 
     def get_and_iterate_child_events(self, query_options):
-        self.query = self.query.replace(
-            'PARENT_CHILD_MASK',
-            '(`Events`.`event_parent` = `Payment_Options`.`event`)'
-        )
-        # Can't use a mask here, so replace a entire WHERE condition
-        self.query = self.query.replace(
-            '`Payment_Options`.`accept_eventbrite` = 1 AND',
-            '`Payment_Options`.`accept_eventbrite` = 1 AND `Events`.`event_parent` IS NOT NULL AND',
-        )
-
-        query_results = self.get_query_results(query_options)
-
+        child_mask = '(`Events`.`event_parent` = `Payment_Options`.`event`)'
+        query = self.query.replace('PARENT_CHILD_MASK', '{}')
+        query = query.format(child_mask)
+        query_results = self.get_query_results(query_options, query)
         self.iterate_querys_results(
             query_results,
             query_options['localize_start_date_query'],
             query_options['localize_end_date_query'],
         )
 
-        self.query = self.query.replace(
-            '(`Events`.`event_parent` = `Payment_Options`.`event`)',
-            'PARENT_CHILD_MASK'
-        )
-
-    def get_query_results(self, query_options):
+    def get_query_results(self, query_options, query):
         query_results = []
 
         with connections['slave'].cursor() as cursor:
             cursor.execute(
-                self.query,
+                query,
                 query_options
             )
             response = cursor.fetchall()

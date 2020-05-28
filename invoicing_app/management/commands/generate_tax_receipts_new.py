@@ -102,7 +102,6 @@ class Command(BaseCommand):
         self.sentry = logging.getLogger('sentry')
         self.error_cont = 0
         self.conditional_mask = ''
-        # self.parent_child_mask = ''
         self.query = '''
                     SELECT
                         `Orders`.`event` as `event_id`,
