@@ -31,4 +31,4 @@ class PaymentOptionsFactory(factory.DjangoModelFactory):
     epp_zip = ''
     epp_city = ''
     epp_state = ''
-    epp_tax_identifier = ''.join(random.choice(string.lowercase) for x in range(random.randint(11, 12)))
+    epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(random.randint(11, 12)))

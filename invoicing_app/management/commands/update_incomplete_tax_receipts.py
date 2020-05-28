@@ -6,7 +6,6 @@ from optparse import make_option
 
 
 class Command(BaseCommand):
-
     help = ('Change status of the tax receipts that have every requirement from INCOMPLETE to PENDING')
 
     option_list = BaseCommand.option_list + (
@@ -61,7 +60,7 @@ class Command(BaseCommand):
             self.billing = 'billing_EB'
 
         if self.verbose:
-            self.__log_hosts_being_used()
+            self._log_hosts_being_used()
         self.logger.info("Finding tax receipts that meet requirements criteria")
         self.find_incomplete_tax_receipts()
         self.update_tax_receipts_that_met_requirements()
@@ -81,7 +80,7 @@ class Command(BaseCommand):
                 reporting_country_code__in=['AR', 'BR'],
                 ).iterator()
         except Exception as e:
-            self.__log_exception(e)
+            self._log_exception(e)
             raise e
 
     def update_tax_receipts_that_met_requirements(self):
@@ -89,13 +88,13 @@ class Command(BaseCommand):
             try:
                 po = PaymentOptions.objects.using(self.invoicing).get(event=tax_receipt.event_id)
                 if tax_receipt.reporting_country_code == 'AR':
-                    self.__check_ARG_requirements(tax_receipt, po)
+                    self._check_ARG_requirements(tax_receipt, po)
                 else:
-                    self.__check_BR_requirements(tax_receipt, po)
+                    self._check_BR_requirements(tax_receipt, po)
             except Exception as e:
-                self.__log_exception(e, txr_id=tax_receipt.id, evnt_id=tax_receipt.event_id)
+                self._log_exception(e, txr_id=tax_receipt.id, evnt_id=tax_receipt.event_id)
 
-    def __check_ARG_requirements(self, tax_receipt, payment_option):
+    def _check_ARG_requirements(self, tax_receipt, payment_option):
         # IF ONE FIELD FAILS CHECK REQUIREMENTS, WE CANT CHANGE TO 'PENDING' STATUS
         # SO ITS POINTLESS TO KEEP CHECKING REST OF FIELDS.
         for requirement in self.arg_requirements:
@@ -104,53 +103,53 @@ class Command(BaseCommand):
                 setattr(tax_receipt, requirement, po_attribute)
             else:
                 if self.verbose:
-                    self.__log_due_to_missing_to_info(
+                    self._log_due_to_missing_to_info(
                         tax_receipt.id,
                         payment_option.id,
                         self.tax_to_po_requirement_dict[requirement],
                         po_attribute
                     )
                 return
-        self.__update_tax_receipt(tax_receipt)
+        self._update_tax_receipt(tax_receipt)
 
-    def __check_BR_requirements(self, tax_receipt, payment_option):
+    def _check_BR_requirements(self, tax_receipt, payment_option):
         # CHECK IF BR TAX AUTHORITY IS CPNJ OR CPF, BECAUSE THEY USE DIFFERENT REQUIREMENTS.
-        if self.__get_epp_tax_identifier_type(payment_option.epp_tax_identifier) == 'CNPJ':
+        if self._get_epp_tax_identifier_type(payment_option.epp_tax_identifier) == 'CNPJ':
             for requirement in self.br_requirements + ('recipient_city',):
                 po_attribute = getattr(payment_option, str(self.tax_to_po_requirement_dict.get(requirement)), '')
                 if self.__check_single_requirement(po_attribute):
                     setattr(tax_receipt, requirement, po_attribute)
                 else:
                     if self.verbose:
-                        self.__log_due_to_missing_to_info(
+                        self._log_due_to_missing_to_info(
                             tax_receipt.id,
                             payment_option.id,
                             self.tax_to_po_requirement_dict[requirement],
                             po_attribute
                         )
                     return
-            self.__update_tax_receipt(tax_receipt)
+            self._update_tax_receipt(tax_receipt)
 
-        elif self.__get_epp_tax_identifier_type(payment_option.epp_tax_identifier) == 'CPF':
+        elif self._get_epp_tax_identifier_type(payment_option.epp_tax_identifier) == 'CPF':
             for requirement in self.br_requirements:
                 po_attribute = getattr(payment_option, str(self.tax_to_po_requirement_dict.get(requirement)), '')
                 if self.__check_single_requirement(po_attribute):
                     setattr(tax_receipt, requirement, po_attribute)
                 else:
                     if self.verbose:
-                        self.__log_due_to_missing_to_info(
+                        self._log_due_to_missing_to_info(
                             tax_receipt.id,
                             payment_option.id,
                             self.tax_to_po_requirement_dict[requirement],
                             po_attribute
                         )
                     return
-            self.__update_tax_receipt(tax_receipt)
+            self._update_tax_receipt(tax_receipt)
 
     def __check_single_requirement(self, po_attr):
         return po_attr != ''
 
-    def __update_tax_receipt(self, tax_receipt):
+    def _update_tax_receipt(self, tax_receipt):
         if self.verbose:
             self.logger.info("Tax receipt with id:{} met every requirement."
                              .format(tax_receipt.id))
@@ -161,21 +160,20 @@ class Command(BaseCommand):
             self.logger.info("Tax receipt with id:{} updated succesfully"
                              .format(tax_receipt.id))
 
-    def __get_epp_tax_identifier_type(self, epp_tax_identifier): #
+    def _get_epp_tax_identifier_type(self, epp_tax_identifier):  #
         if len(epp_tax_identifier) > self.CPF_CHAR_COUNT_LIMIT:
             return 'CNPJ'
         else:
             return 'CPF'
-        return ''
 
-    def __log_exception(self, e, txr_id=None, evnt_id=None):
+    def _log_exception(self, e, txr_id=None, evnt_id=None):
         if txr_id:
             self.logger.error('''Tax Receipt with id:{} failed.
                                  Couldn't find associated Payment Option through the TaxReceipt.event={}'''
                               .format(txr_id, evnt_id))
         self.logger.error(e.message)
 
-    def __log_due_to_missing_to_info(self, tax_id, po_id, requirement, po_attribute):
+    def _log_due_to_missing_to_info(self, tax_id, po_id, requirement, po_attribute):
         self.logger.\
             info('''
                     Couldn't update status of tax receipt with id: {} to PENDING,
@@ -188,7 +186,7 @@ class Command(BaseCommand):
                          po_attribute)
                  )
 
-    def __log_hosts_being_used(self):
+    def _log_hosts_being_used(self):
         for db in (self.invoicing, self.billing):
             self.logger.info("Using {}. Host name: {}, Database name: {}".format(
                     db,

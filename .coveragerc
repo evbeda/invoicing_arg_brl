@@ -9,7 +9,6 @@ omit =
     invoicing_app/admin.py
     invoicing_app/models.py
     invoicing_app/management/commands/generate_tax_receipts_old.py
-    invoicing_app/management/commands/update_incomplete_tax_receipts.py
     invoicing_app/management/commands/create_dummy_data.py
     invoicing_app/management/commands/generate_tax_receipts.py
     invoicing_app/tests/factories/tax_receipts.py
@@ -30,6 +29,8 @@ exclude_lines =
     def enable_logging
     def call_service
     def _log_exception
+    def _log_hosts_being_used
+    def _log_due_to_missing_to_info
     if options['logging']:
     today = dt.today()
     def localize_date
@@ -37,3 +38,5 @@ exclude_lines =
     if not EB_TAX_INFO
     def _send_slack_notification_message
     self._send_slack_notification_message
+    class TaxReceiptStatuses
+    if self.verbose

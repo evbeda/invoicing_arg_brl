@@ -5,18 +5,21 @@ from django.test import TestCase
 
 from datetime import datetime as dt
 from time import sleep
-
+import random
+import string
 from mock import patch
 
 from django.core.management.base import CommandError
 
 from invoicing_app.management.commands.generate_tax_receipts_old import Command as CommandOld
 from invoicing_app.management.commands.generate_tax_receipts_new import Command as CommandNew
+from invoicing_app.management.commands.update_incomplete_tax_receipts import Command as UpdateIncompleteCommand
 
 from factories.user import UserFactory
 from factories.event import EventFactory
 from factories.paymentoptions import PaymentOptionsFactory
 from factories.order import OrderFactory
+from factories.tax_receipts import TaxReceiptsFactory
 from invoicing_app.circuitbreaker import CircuitBreaker
 
 
@@ -24,6 +27,7 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
     """
         Unittest for old and new scripts
     """
+
     def setUp(self):
         self.options = {
             'user_id': None,
@@ -167,6 +171,7 @@ class TestScriptGenerateTaxReceiptsOld(TestCase):
     """
         Unittest for the old script
     """
+
     def setUp(self):
         self.options = {
             'user_id': None,
@@ -272,6 +277,7 @@ class TestScriptGenerateTaxReceiptsNew(TestCase):
     """
         Unittest for the new script
     """
+
     def setUp(self):
         self.options = {
             'user_id': None,
@@ -401,10 +407,12 @@ class TestScriptGenerateTaxReceiptsNew(TestCase):
             returns_one_element
         )
 
+
 class TestIntegration(TestCase):
     """
         Integration tests for both scripts
     """
+
     def setUp(self):
         self.options = {
             'user_id': None,
@@ -716,7 +724,6 @@ class TestIntegration(TestCase):
         'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
     )
     def test_childs(self, call_new, call_old):
-
         my_user_9 = UserFactory.build()
         my_user_9.save()
         my_event_9 = EventFactory.build(
@@ -773,6 +780,7 @@ class TestIntegration(TestCase):
             call_new.call_count
         )
 
+
 class TestCircuitBreaker(TestCase):
     def setUp(self):
         def division(a, b):
@@ -780,11 +788,13 @@ class TestCircuitBreaker(TestCase):
                 return a // b
             except Exception as e:
                 raise e
-        self.circuit_breaker = CircuitBreaker(threshold=3,
-                                              timeout=1,
-                                              exception=ZeroDivisionError,
-                                              external_service=division
-                                              )
+
+        self.circuit_breaker = CircuitBreaker(
+            threshold=3,
+            timeout=1,
+            exception=ZeroDivisionError,
+            external_service=division
+        )
 
     def test_service_ok(self):
         call = self.circuit_breaker.call_external_service(2, 2)
@@ -819,3 +829,289 @@ class TestCircuitBreaker(TestCase):
         -Expected exception: ZeroDivisionError  
         '''
         self.assertEquals(str(self.circuit_breaker), expected_str)
+
+
+class TestUpdateTaxReceipts(TestCase):
+    def setUp(self):
+        self.command = UpdateIncompleteCommand()
+        self.options = {
+            'verbose': False,
+            'dry_run': False,
+        }
+
+        self.user = UserFactory.create()
+        self.event = EventFactory.create(
+            user=self.user,
+        )
+
+        self.tax_receipt = TaxReceiptsFactory.create(
+            event_id=self.event.id,
+            user_id=self.user.id,
+            status_id=1
+        )
+
+        self.payment_options = PaymentOptionsFactory.create(
+            event=self.event,
+        )
+
+    @patch(
+        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._check_ARG_requirements',
+    )
+    def test_update_tax_receipts_that_met_requirements_arg(self, check_arg):
+        country = 'AR'
+        self.tax_receipt.reporting_country_code = country
+        self.tax_receipt.save()
+
+        self.payment_options.epp_country = country
+        self.payment_options.save()
+
+        self.command.tax_receipts = [self.tax_receipt]
+        self.command.update_tax_receipts_that_met_requirements()
+
+        self.assertEqual(
+            check_arg.call_args[0][0],
+            self.tax_receipt
+        )
+
+        self.assertEqual(
+            check_arg.call_args[0][1],
+            self.payment_options
+        )
+
+    @patch(
+        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._check_BR_requirements',
+    )
+    def test_update_tax_receipts_that_met_requirements_br(self, check_br):
+        country = 'BR'
+        self.tax_receipt.reporting_country_code = country
+        self.tax_receipt.save()
+
+        self.payment_options.epp_country = country
+        self.payment_options.save()
+
+        self.command.tax_receipts = [self.tax_receipt]
+        self.command.update_tax_receipts_that_met_requirements()
+
+        self.assertEqual(
+            check_br.call_args[0][0],
+            self.tax_receipt
+        )
+
+        self.assertEqual(
+            check_br.call_args[0][1],
+            self.payment_options
+        )
+
+    @patch(
+        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._update_tax_receipt',
+    )
+    def test_check_ARG_requirements(self, update_tax_receipt):
+        country = 'AR'
+
+        self.tax_receipt.reporting_country_code = country
+        self.tax_receipt.recipient_address = ''
+        self.tax_receipt.recipient_name = ''
+        self.tax_receipt.recipient_tax_identifier_number = ''
+        self.tax_receipt.save()
+
+        self.payment_options.epp_country = country
+        self.payment_options.epp_address1 = 'address1'
+        self.payment_options.epp_name_on_account = 'epp_name_on_account'
+        self.payment_options.epp_zip = '2132'
+        self.payment_options.epp_city = 'city'
+        self.payment_options.epp_state = 'state'
+
+        self.payment_options.save()
+
+        self.command._check_ARG_requirements(self.tax_receipt, self.payment_options)
+
+        self.assertEqual(
+            update_tax_receipt.call_args[0][0].recipient_address,
+            self.payment_options.epp_address1
+        )
+
+        self.assertEqual(
+            update_tax_receipt.call_args[0][0].recipient_tax_identifier_number,
+            self.payment_options.epp_tax_identifier
+        )
+
+        self.assertEqual(
+            update_tax_receipt.call_args[0][0].recipient_name,
+            self.payment_options.epp_name_on_account
+        )
+
+    @patch(
+        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._update_tax_receipt',
+    )
+    def test_check_BR_requirements_zip_cpf(self, update_tax_receipt):
+        country = 'BR'
+
+        self.tax_receipt.reporting_country_code = country
+        self.tax_receipt.recipient_postal_code = ''
+        self.tax_receipt.save()
+
+        self.payment_options.epp_country = country
+        self.payment_options.epp_address1 = 'address1'
+        self.payment_options.epp_name_on_account = 'epp_name_on_account'
+        self.payment_options.epp_zip = '2132'
+        self.payment_options.epp_city = 'city'
+        self.payment_options.epp_state = 'state'
+        self.payment_options.epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(11))
+
+        self.payment_options.save()
+
+        self.command._check_BR_requirements(self.tax_receipt, self.payment_options)
+
+        self.assertEqual(
+            update_tax_receipt.call_args[0][0].recipient_postal_code,
+            self.payment_options.epp_zip
+        )
+
+    @patch(
+        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._update_tax_receipt',
+    )
+    def test_check_BR_requirements_zip_cnpj(self, update_tax_receipt):
+        country = 'BR'
+
+        self.tax_receipt.reporting_country_code = country
+        self.tax_receipt.recipient_postal_code = ''
+        self.tax_receipt.save()
+
+        self.payment_options.epp_country = country
+        self.payment_options.epp_address1 = 'address1'
+        self.payment_options.epp_name_on_account = 'epp_name_on_account'
+        self.payment_options.epp_zip = '2132'
+        self.payment_options.epp_city = 'city'
+        self.payment_options.epp_state = 'state'
+        self.payment_options.epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(12))
+
+        self.payment_options.save()
+
+        self.command._check_BR_requirements(self.tax_receipt, self.payment_options)
+
+        self.assertEqual(
+            update_tax_receipt.call_args[0][0].recipient_postal_code,
+            self.payment_options.epp_zip
+        )
+
+    @patch(
+        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._log_due_to_missing_to_info',
+    )
+    def test_check_ARG_requirements_error(self, log_due_to_missing_to_info):
+        country = 'AR'
+        self.command.verbose = True
+
+        self.tax_receipt.reporting_country_code = country
+        self.tax_receipt.recipient_address = ''
+        self.tax_receipt.recipient_name = ''
+        self.tax_receipt.recipient_tax_identifier_number = ''
+        self.tax_receipt.save()
+
+        self.payment_options.epp_country = country
+        self.payment_options.epp_name_on_account = 'epp_name_on_account'
+        self.payment_options.epp_zip = '2132'
+        self.payment_options.epp_city = 'city'
+        self.payment_options.epp_state = 'state'
+
+        self.payment_options.save()
+
+        self.command._check_ARG_requirements(self.tax_receipt, self.payment_options)
+
+        self.assertEqual(
+            log_due_to_missing_to_info.call_args[0][0],
+            self.tax_receipt.id
+        )
+
+        self.assertEqual(
+            log_due_to_missing_to_info.call_args[0][1],
+            self.payment_options.id
+        )
+
+    @patch(
+        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._log_due_to_missing_to_info',
+    )
+    def test_check_BR_requirements_zip_cpf_error(self, log_due_to_missing_to_info):
+        country = 'BR'
+        self.command.verbose = True
+
+        self.tax_receipt.reporting_country_code = country
+        self.tax_receipt.recipient_postal_code = ''
+        self.tax_receipt.save()
+
+        self.payment_options.epp_country = country
+        self.payment_options.epp_address1 = 'address1'
+        self.payment_options.epp_zip = '2132'
+        self.payment_options.epp_city = 'city'
+        self.payment_options.epp_state = 'state'
+        self.payment_options.epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(11))
+
+        self.payment_options.save()
+
+        self.command._check_BR_requirements(self.tax_receipt, self.payment_options)
+
+        self.assertEqual(
+            log_due_to_missing_to_info.call_args[0][0],
+            self.tax_receipt.id
+        )
+
+        self.assertEqual(
+            log_due_to_missing_to_info.call_args[0][1],
+            self.payment_options.id
+        )
+
+    @patch(
+        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._log_due_to_missing_to_info',
+    )
+    def test_check_BR_requirements_zip_cnpj_error(self, log_due_to_missing_to_info):
+        country = 'BR'
+        self.command.verbose = True
+
+        self.tax_receipt.reporting_country_code = country
+        self.tax_receipt.recipient_postal_code = ''
+        self.tax_receipt.save()
+
+        self.payment_options.epp_country = country
+        self.payment_options.epp_name_on_account = 'epp_name_on_account'
+        self.payment_options.epp_zip = '2132'
+        self.payment_options.epp_city = 'city'
+        self.payment_options.epp_state = 'state'
+        self.payment_options.epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(12))
+
+        self.payment_options.save()
+
+        self.command._check_BR_requirements(self.tax_receipt, self.payment_options)
+
+        self.assertEqual(
+            log_due_to_missing_to_info.call_args[0][0],
+            self.tax_receipt.id
+        )
+
+        self.assertEqual(
+            log_due_to_missing_to_info.call_args[0][1],
+            self.payment_options.id
+        )
+
+    @patch(
+        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._log_hosts_being_used',
+    )
+    def test_update_incomplete_tax_receipt_handle_dry_run(self, log_hosts_being_used):
+        country = 'BR'
+        self.tax_receipt.reporting_country_code = country
+        self.tax_receipt.save()
+
+        self.payment_options.epp_country = country
+        self.payment_options.epp_address1 = 'address1'
+        self.payment_options.epp_name_on_account = 'epp_name_on_account'
+        self.payment_options.epp_zip = '2132'
+        self.payment_options.epp_city = 'city'
+        self.payment_options.epp_state = 'state'
+        self.payment_options.epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(11))
+        self.payment_options.save()
+
+        self.command.billing = 'default'
+        self.command.handle(**self.options)
+
+        self.assertEqual(
+            self.command.count,
+            1
+        )
