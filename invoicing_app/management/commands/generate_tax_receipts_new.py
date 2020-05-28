@@ -101,6 +101,7 @@ class Command(BaseCommand):
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
         self.error_cont = 0
+        self.conditional_mask = ''
         self.query = '''
                     SELECT
                         `Orders`.`event` as `event_id`,
@@ -131,7 +132,7 @@ class Command(BaseCommand):
                         `Orders`.`pp_date` >= %(localize_start_date_query)s AND
                         `Payment_Options`.`accept_eventbrite` = 1 AND
                         `Payment_Options`.`epp_country` = %(declarable_tax_receipt_countries_query)s
-                        CONDITION_MASK
+                        {}
                     )
                     GROUP BY
                         `event_id`
@@ -182,24 +183,14 @@ class Command(BaseCommand):
 
         if options['event_id']:
             self.event_id = options['event_id']
-            self.query = self.query.replace(
-                'CONDITION_MASK',
-                'AND `Events`.`id` = ' + str(self.event_id)
-            )
+            self.conditional_mask = 'AND `Events`.`id` = ' + str(self.event_id)
 
         if options['user_id']:
             self.user_id = options['user_id']
-            self.query = self.query.replace(
-                'CONDITION_MASK',
-                'AND `Events`.`uid` = ' + str(self.user_id)
-            )
+            self.conditional_mask = 'AND `Events`.`uid` = ' + str(self.user_id)
 
-        # If there isn't condition, remove the CONDITION MASK from the query
-        if (not options['user_id']) and (not options['event_id']):
-            self.query = self.query.replace(
-                'CONDITION_MASK',
-                ''
-            )
+        self.query = self.query.replace('CONDTIONAL MASK', '{}')
+        self.query = self.query.format(self.conditional_mask)
 
         localize_start_date = self.localize_date(
             self.declarable_tax_receipt_countries,
