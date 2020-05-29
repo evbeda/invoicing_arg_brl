@@ -1,9 +1,12 @@
+from datetime import datetime
 from django.core.management.base import BaseCommand
 from django.db import connections
 from invoicing_app.models import PaymentOptions, Event, TaxReceipt, User, Users_Tax_Regimes
+from invoicing_app.slack_module import SlackConnection
 import logging
 from optparse import make_option
 
+SLACK_API_TOKEN = ""
 
 class Command(BaseCommand):
     help = ('Change status of the tax receipts that have every requirement from INCOMPLETE to PENDING')
@@ -37,9 +40,8 @@ class Command(BaseCommand):
             "recipient_tax_identifier_number": "epp_tax_identifier",
             "recipient_postal_code": "epp_zip",
             "recipient_city": "epp_city",
-            "tax_regime_type_id": "",
         }
-        self.arg_requirements = base_requirements# + ("tax_regime_type_id",)
+        self.arg_requirements = base_requirements
         self.br_requirements = base_requirements + ("recipient_postal_code",)
         self.CPF_CHAR_COUNT_LIMIT = 11
         self.__configure_logger()
@@ -60,7 +62,14 @@ class Command(BaseCommand):
             self.billing = 'billing_EB'
 
         if self.verbose:
+            self._send_slack_notification_message(
+                """
+                The update tax receipts process has started.
+                """
+            )
             self._log_hosts_being_used()
+            start_date = datetime.now()
+
         self.logger.info("Finding tax receipts that meet requirements criteria")
         self.find_incomplete_tax_receipts()
         self.update_tax_receipts_that_met_requirements()
@@ -72,6 +81,15 @@ class Command(BaseCommand):
             self.logger.info("Updated {} tax receipts to PENDING".format(self.count))
             self.logger.info("Update process completed.")
 
+        if self.verbose:
+            self._send_slack_notification_message(
+                """
+                The update tax receipts process has finished.
+                Number of tax receipts that are now PENDING: {}
+                Start date: {}
+                End date: {}
+                """.format(self.count, start, datetime.now())
+            )
     def find_incomplete_tax_receipts(self):
         try:
             self.tax_receipts = TaxReceipt.objects.using(self.billing)\
@@ -223,6 +241,10 @@ class Command(BaseCommand):
         ch.setFormatter(formatter)
         logger.addHandler(ch)
 
+    def _send_slack_notification_message(self, message):
+        slack = SlackConnection(token=SLACK_API_TOKEN)
+        channel = '#invoicing_arg_brl'
+        slack.post_message(channel, message)
 
 class TaxReceiptStatuses:
     @staticmethod

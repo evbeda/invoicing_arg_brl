@@ -20,6 +20,7 @@ from factories.event import EventFactory
 from factories.paymentoptions import PaymentOptionsFactory
 from factories.order import OrderFactory
 from factories.tax_receipts import TaxReceiptsFactory
+from factories.users_tax_regimes import UserTaxRegimesFactory
 from invoicing_app.circuitbreaker import CircuitBreaker
 
 
@@ -853,6 +854,7 @@ class TestUpdateTaxReceipts(TestCase):
         self.payment_options = PaymentOptionsFactory.create(
             event=self.event,
         )
+        self.user_tax_regime = UserTaxRegimesFactory.create()
 
     @patch(
         'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._check_ARG_requirements',
@@ -913,13 +915,13 @@ class TestUpdateTaxReceipts(TestCase):
         self.tax_receipt.recipient_name = ''
         self.tax_receipt.recipient_tax_identifier_number = ''
         self.tax_receipt.save()
-
         self.payment_options.epp_country = country
         self.payment_options.epp_address1 = 'address1'
         self.payment_options.epp_name_on_account = 'epp_name_on_account'
         self.payment_options.epp_zip = '2132'
         self.payment_options.epp_city = 'city'
         self.payment_options.epp_state = 'state'
+
 
         self.payment_options.save()
 
@@ -984,8 +986,10 @@ class TestUpdateTaxReceipts(TestCase):
         self.payment_options.epp_city = 'city'
         self.payment_options.epp_state = 'state'
         self.payment_options.epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(12))
-
         self.payment_options.save()
+
+        self.user_tax_regime.user_id = self.payment_options.user_id
+        self.user_tax_regime.save()
 
         self.command._check_BR_requirements(self.tax_receipt, self.payment_options)
 
@@ -1012,11 +1016,9 @@ class TestUpdateTaxReceipts(TestCase):
         self.payment_options.epp_zip = '2132'
         self.payment_options.epp_city = 'city'
         self.payment_options.epp_state = 'state'
-
         self.payment_options.save()
 
         self.command._check_ARG_requirements(self.tax_receipt, self.payment_options)
-
         self.assertEqual(
             log_due_to_missing_to_info.call_args[0][0],
             self.tax_receipt.id
