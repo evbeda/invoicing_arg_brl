@@ -142,10 +142,6 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
             self.my_command_new.event_id,
             self.options['event_id']
         )
-        self.assertIn(
-            'AND `Events`.`id` = {}'.format(self.options['event_id']),
-            self.my_command_new.query
-        )
 
     def test_user_id_option(self):
         self.options['user_id'] = '1'
@@ -161,11 +157,6 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
             self.my_command_new.user_id,
             self.options['user_id']
         )
-        self.assertIn(
-            'AND `Events`.`uid` = {}'.format(self.options['user_id']),
-            self.my_command_new.query
-        )
-
 
 class TestScriptGenerateTaxReceiptsOld(TestCase):
     """
@@ -335,7 +326,7 @@ class TestScriptGenerateTaxReceiptsNew(TestCase):
             'status_query': 100,
         }
         self.my_command_new.query = self.my_command_new.query.replace(
-            'CONDITION_MASK',
+            '{condition_mask}',
             ''
         )
         self.my_command_new.get_and_iterate_no_series_events(query_options_test)
@@ -364,7 +355,7 @@ class TestScriptGenerateTaxReceiptsNew(TestCase):
             'status_query': 100,
         }
         self.my_command_new.query = self.my_command_new.query.replace(
-            'CONDITION_MASK',
+            '{condition_mask}',
             ''
         )
         self.my_command_new.get_and_iterate_child_events(query_options_test)
@@ -390,20 +381,24 @@ class TestScriptGenerateTaxReceiptsNew(TestCase):
             'status_query': 100,
         }
         self.my_command_new.query = self.my_command_new.query.replace(
-            'CONDITION_MASK',
+            '{condition_mask}',
             ''
         )
         self.my_command_new.query = self.my_command_new.query.replace(
-            'PARENT_CHILD_MASK',
+            '{parent_child_mask}',
             '(`Events`.`id` = `Payment_Options`.`event`)'
         )
         returns_one_element = 1
-        self.assertEqual(
-            str(type(self.my_command_new.get_query_results(query_options_test))),
-            "<type 'list'>"
+        self.assertIsInstance(
+            self.my_command_new.get_query_results(
+                query_options_test, self.my_command_new.query
+            ),
+            list
         )
         self.assertEqual(
-            len(self.my_command_new.get_query_results(query_options_test)),
+            len(self.my_command_new.get_query_results(
+                query_options_test, self.my_command_new.query
+            )),
             returns_one_element
         )
 
@@ -802,7 +797,7 @@ class TestCircuitBreaker(TestCase):
         self.assertEquals(call, 1)
 
     def test_threshold_reached_and_circuit_opens(self):
-        ## Most tests use 2 0 as *args to test faulty services because 2 / 0 raises an Exception
+        # Most tests use 2 0 as *args to test faulty services because 2 / 0 raises an Exception
         self.circuit_breaker.call_external_service(2, 0)
         self.circuit_breaker.call_external_service(2, 0)
         self.circuit_breaker.call_external_service(2, 0)
@@ -813,7 +808,7 @@ class TestCircuitBreaker(TestCase):
         self.circuit_breaker.call_external_service(2, 0)
         self.circuit_breaker.call_external_service(2, 0)
         self.circuit_breaker.call_external_service(2, 0)
-        ##Sleep time to update circuit state to HALF OPEN
+        # Sleep time to update circuit state to HALF OPEN
         sleep(2)
         self.circuit_breaker.call_external_service(2, 0)
         self.assertEquals(self.circuit_breaker.show_state, "HALF-OPEN")
@@ -826,7 +821,7 @@ class TestCircuitBreaker(TestCase):
         -Circuit state: CLOSED,
         -Circuit timeout: 1s,
         -Circuit threshold: 3,
-        -Expected exception: ZeroDivisionError  
+        -Expected exception: ZeroDivisionError
         '''
         self.assertEquals(str(self.circuit_breaker), expected_str)
 

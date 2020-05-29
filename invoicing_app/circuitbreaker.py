@@ -83,7 +83,7 @@ class CircuitBreaker(object):
         -Circuit state: {},
         -Circuit timeout: {}s,
         -Circuit threshold: {},
-        -Expected exception: {}  
+        -Expected exception: {}
         '''.format(self._external_service.__name__.capitalize(),
                    0 if not self._last_failure else self._last_failure,
                    self.show_state,
