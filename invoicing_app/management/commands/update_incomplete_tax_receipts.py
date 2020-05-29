@@ -88,14 +88,14 @@ class Command(BaseCommand):
                 Number of tax receipts that are now PENDING: {}
                 Start date: {}
                 End date: {}
-                """.format(self.count, start, datetime.now())
+                """.format(self.count, start_date, datetime.now())
             )
     def find_incomplete_tax_receipts(self):
         try:
             self.tax_receipts = TaxReceipt.objects.using(self.billing)\
                 .filter(
                 status_id=TaxReceiptStatuses.get_id_from_name("INCOMPLETE"),
-                reporting_country_code__in=['AR'],
+                reporting_country_code__in=['AR', 'BR'],
                 ).iterator()
         except Exception as e:
             self._log_exception(e)
