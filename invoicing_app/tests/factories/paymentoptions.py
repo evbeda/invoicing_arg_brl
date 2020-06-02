@@ -25,10 +25,10 @@ class PaymentOptionsFactory(factory.DjangoModelFactory):
     epp_country = 'AR'
     accept_eventbrite = True
     event = None
-    epp_name_on_account = 'name_ex'
-    epp_address1 = 'address1_gcruz'
-    epp_address2 = 'address2_gcruz'
-    epp_zip = '5500'
-    epp_city = 'g_cruz'
-    epp_state = 'mendoza'
+    epp_name_on_account = ''
+    epp_address1 = ''
+    epp_address2 = ''
+    epp_zip = ''
+    epp_city = ''
+    epp_state = ''
     epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(random.randint(11, 12)))
