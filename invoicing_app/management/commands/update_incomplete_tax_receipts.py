@@ -215,7 +215,7 @@ class Command(BaseCommand):
             info('''
                     Couldn't update status of tax receipt with id: {} to PENDING,
                     due to missing information on its associated PaymentOption with id: {}.
-                    The field that failed is PaymentOption.{}
+                    The field that failed is PaymentOption.{} 
                     Its value is: '{}', and it needs to be completed'''
                  .format(tax_id,
                          po_id,
@@ -253,4 +253,3 @@ class TaxReceiptStatuses:
             return 1
         elif string == 'PENDING':
             return 2
-
