@@ -242,3 +242,11 @@ class TaxReceipt(models.Model):
 
     class Meta:
         db_table = "Tax_Receipts"
+
+
+class Users_Tax_Regimes(models.Model):
+    tax_regime_type_id = models.CharField(max_length=20)
+    user_id = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = "Users_Tax_Regimes"
