@@ -15,8 +15,10 @@ NAME_LOGGING = 'generate_tax_receipts'
 
 class TaxReceiptGenerator():
 
-    def __init__(self, options):
-        self.options = options
+    def __init__(self, dry_run, do_logging):
+        self.dry_run = dry_run
+        self.do_logging = do_logging
+        self.logger = logging.getLogger('financial_transactions')
         self.conditional_mask = ''
         self.cont_tax_receipts = 0
         self.error_cont = 0
@@ -64,72 +66,43 @@ class TaxReceiptGenerator():
             ORDER BY NULL
         '''
 
-    def run(self):
-        self.validate_options()
+    def run(self, request):
+        if self.do_logging:
+            self.logger = logging.getLogger(NAME_LOGGING)
+
+        if request.event_id:
+            event_id = request.event_id
+            self.conditional_mask = 'AND `Events`.`id` = {}'.format(event_id)
+
+        if request.user_id:
+            user_id = request.user_id
+            self.conditional_mask = 'AND `Events`.`uid` = {}'.format(user_id)
 
         localize_start_date = self.localize_date(
-            self.declarable_tax_receipt_countries,
-            self.period_start
+            request.country,
+            request.period_start
         )
         localize_end_date = self.localize_date(
-            self.declarable_tax_receipt_countries,
-            self.period_end
+            request.country,
+            request.period_end
         )
 
         query_options = {
             'localize_end_date_query': localize_end_date,
             'localize_start_date_query': localize_start_date,
-            'declarable_tax_receipt_countries_query': self.declarable_tax_receipt_countries,
+            'declarable_tax_receipt_countries_query': request.country,
             'status_query': 100,
         }
 
         self.logger.info("Starting generate tax receipts")
-        self.logger.info("Start date: {}".format(self.period_start))
-        self.logger.info("End date: {}".format(self.period_end))
+        self.logger.info("Start date: {}".format(request.period_start))
+        self.logger.info("End date: {}".format(request.period_end))
         self.get_and_iterate_no_series_events(query_options)
         self.get_and_iterate_child_events(query_options)
         self.logger.info("Tax receipts generated: {}".format(self.cont_tax_receipts))
         self.logger.info("Errors: {}".format(self.error_cont))
         self.logger.info("End Generation new tax receipts")
         self.logger.info("Ending generate tax receipts")
-
-    def validate_options(self):
-        self.dry_run = self.options['dry_run']
-
-        if self.options['country']:
-            if self.options['country'] not in settings.EVENTBRITE_TAX_INFORMATION:
-                raise CountryNotConfiguredException()
-            self.declarable_tax_receipt_countries = self.options['country']
-        else:
-            raise NoCountryProvidedException()
-
-        if self.options['user_id'] and self.options['event_id']:
-            raise UserAndEventProvidedException()
-
-        if self.options['today_date']:
-            try:
-                today = dt.strptime(self.options['today_date'], '%Y-%m-%d')
-                self.period_end = dt(today.year, today.month, today.day)
-            except Exception:
-                raise IncorrectFormatDateException
-        else:
-            today = dt.today()
-
-        if self.options['logging']:
-            self.logger = logging.getLogger(NAME_LOGGING)
-
-        curr_month = dt(today.year, today.month, 1)
-        prev_month = curr_month - relativedelta(months=1)
-        self.period_start = prev_month
-        self.period_end = curr_month
-
-        if self.options['event_id']:
-            event_id = self.options['event_id']
-            self.conditional_mask = 'AND `Events`.`id` = {}'.format(event_id)
-
-        if self.options['user_id']:
-            user_id = self.options['user_id']
-            self.conditional_mask = 'AND `Events`.`uid` = {}'.format(user_id)
 
     def localize_date(self, country_code, date):
         if not self.dry_run:
@@ -379,17 +352,63 @@ class TaxReceiptGenerator():
         self.error_cont = self.error_cont + 1
 
 
+class TaxReceiptGeneratorRequest(object):
+
+    def __init__(self, user_id, event_id, country, today_date):
+        self.country = country
+        self.user_id = user_id
+        self.event_id = event_id
+        self.today_date = today_date
+        self._validate()
+        self._post_validate()
+
+    def _validate(self):
+        """
+            Check if the params passed to the tax_receipt_generator are ok.
+        """
+        if self.country:
+            if self.country not in settings.EVENTBRITE_TAX_INFORMATION:
+                raise CountryNotConfiguredException()
+        else:
+            raise NoCountryProvidedException()
+
+        if self.user_id and self.event_id:
+            raise UserAndEventProvidedException()
+
+        if self.today_date:
+            try:
+                self.today = dt.strptime(self.today_date, '%Y-%m-%d')
+                self.period_end = dt(self.today.year, self.today.month, self.today.day)
+            except Exception:
+                raise IncorrectFormatDateException
+        else:
+            self.today = dt.today()
+
+    def _post_validate(self):
+        """
+            Set the fields after validation
+        """
+        curr_month = dt(self.today.year, self.today.month, 1)
+        prev_month = curr_month - relativedelta(months=1)
+        self.period_start = prev_month
+        self.period_end = curr_month
+
+
 class CountryNotConfiguredException(Exception):
-    pass
+    def __init__(self):
+        self.message = 'The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)'
 
 
 class UserAndEventProvidedException(Exception):
-    pass
+    def __init__(self):
+        self.message = 'Can not use event and user options in the same time'
 
 
 class NoCountryProvidedException(Exception):
-    pass
+    def __init__(self):
+        self.message = 'No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)'
 
 
 class IncorrectFormatDateException(Exception):
-    pass
+    def __init__(self):
+        self.message = 'Date is not matching format YYYY-MM-DD'

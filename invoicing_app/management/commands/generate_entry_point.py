@@ -3,13 +3,14 @@ from django.core.management.base import (
     CommandError
 )
 from optparse import make_option
-import logging
+
 from invoicing_app.tax_receipt_generator import (
     CountryNotConfiguredException,
     IncorrectFormatDateException,
     NoCountryProvidedException,
     TaxReceiptGenerator,
-    UserAndEventProvidedException,
+    TaxReceiptGeneratorRequest,
+    UserAndEventProvidedException
 )
 
 
@@ -57,25 +58,26 @@ class Command(BaseCommand):
         ),
     )
 
-    def __init__(self, *args, **kwargs):
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('--- %(name)s - %(levelname)s - %(message)s ---')
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
-        super(Command, self).__init__(*args, **kwargs)
-
     def handle(self, **options):
-        tax_receipt_generator_for_ar = TaxReceiptGenerator(options)
+
+        tax_generator_for_ar = TaxReceiptGenerator(
+            dry_run=options['dry_run'],
+            do_logging=options['logging']
+        )
         try:
-            tax_receipt_generator_for_ar.run()
-        except CountryNotConfiguredException:
-            raise CommandError('The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)')
-        except UserAndEventProvidedException:
-            raise CommandError('Can not use event and user options in the same time')
-        except NoCountryProvidedException:
-            raise CommandError('No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)')
-        except IncorrectFormatDateException:
-            raise CommandError('Date is not matching format YYYY-MM-DD')
+            request = TaxReceiptGeneratorRequest(
+                event_id=options['event_id'],
+                user_id=options['user_id'],
+                country=options['country'],
+                today_date=options.get('today_date'),
+            )
+        except CountryNotConfiguredException as e:
+            raise CommandError(e.message)
+        except UserAndEventProvidedException as e:
+            raise CommandError(e.message)
+        except NoCountryProvidedException as e:
+            raise CommandError(e.message)
+        except IncorrectFormatDateException as e:
+            raise CommandError(e.message)
+
+        tax_generator_for_ar.run(request)
