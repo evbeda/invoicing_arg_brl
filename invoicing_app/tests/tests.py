@@ -23,6 +23,12 @@ from factories.tax_receipts import TaxReceiptsFactory
 from factories.users_tax_regimes import UserTaxRegimesFactory
 from invoicing_app.circuitbreaker import CircuitBreaker
 
+from invoicing_app.tax_receipt_generator import (
+    TaxReceiptGenerator
+)
+
+from decimal import Decimal
+
 
 class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
     """
@@ -158,6 +164,7 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
             self.my_command_new.user_id,
             self.options['user_id']
         )
+
 
 class TestScriptGenerateTaxReceiptsOld(TestCase):
     """
@@ -941,4 +948,226 @@ class TestUpdateTaxReceipts(TestCase):
         self.assertEqual(
             self.command.count,
             1
+        )
+
+
+class TestTaxReceiptsGenerator(TestCase):
+    """
+        Unit test for tax_receipt_generator.TaxReceiptGenerator module
+        Be carefull if you move the TaxReceiptGenerator module, 'cause the patchs
+    """
+    def setUp(self):
+        self.my_generator = TaxReceiptGenerator(dry_run=True, do_logging=False)
+
+    def test_init(self):
+        self.assertTrue(self.my_generator.dry_run)
+        self.assertFalse(self.my_generator.do_logging)
+        self.assertIsInstance(self.my_generator.query, str)
+
+    def test_localize_date(self):
+        country_code = 'AR'
+        tz = 'America/Argentina/Buenos_Aires'
+        date = dt(2020, 03, 10, 0, 0)
+        local_date = self.my_generator.localize_date(country_code, date)
+
+        self.assertEqual(local_date.year, date.year)
+        self.assertEqual(local_date.month, date.month)
+        self.assertEqual(local_date.day, date.day)
+        self.assertEqual(str(local_date.tzinfo), tz)
+
+    @patch(
+        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.get_query_results'
+    )
+    def test_get_and_iterate_no_series_query(self, patch_query):
+        """Test what we're sending to the query"""
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+        parent_mask = '(`Events`.`id` = `Payment_Options`.`event`)'
+        self.my_generator.get_and_iterate_no_series_events(query_options_test)
+
+        self.assertEqual(patch_query.call_args[0][0], query_options_test)
+        self.assertIn(
+            parent_mask,
+            patch_query.call_args[0][1]
+        )
+
+    @patch(
+        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.iterate_querys_results'
+    )
+    def test_get_and_iterate_no_series(self, patch_iterate):
+        """Test what we're sending to iterate"""
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+        self.my_generator.get_and_iterate_no_series_events(query_options_test)
+
+        self.assertIsInstance(patch_iterate.call_args[0][0], list)
+        self.assertEqual(
+            patch_iterate.call_args[0][1],
+            query_options_test['localize_start_date_query']
+        )
+        self.assertEqual(
+            patch_iterate.call_args[0][2],
+            query_options_test['localize_end_date_query']
+        )
+
+    @patch(
+        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.get_query_results'
+    )
+    def test_get_and_iterate_child_query(self, patch_query):
+        """Test what we're sending to the query"""
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+        child_mask = '(`Events`.`event_parent` = `Payment_Options`.`event`)'
+        self.my_generator.get_and_iterate_child_events(query_options_test)
+
+        self.assertEqual(patch_query.call_args[0][0], query_options_test)
+        self.assertIn(
+            child_mask,
+            patch_query.call_args[0][1]
+        )
+
+    @patch(
+        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.iterate_querys_results'
+    )
+    def test_get_and_iterate_child(self, patch_iterate):
+        """Test what we're sending to iterate"""
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+        self.my_generator.get_and_iterate_child_events(query_options_test)
+
+        self.assertIsInstance(patch_iterate.call_args[0][0], list)
+        self.assertEqual(
+            patch_iterate.call_args[0][1],
+            query_options_test['localize_start_date_query']
+        )
+        self.assertEqual(
+            patch_iterate.call_args[0][2],
+            query_options_test['localize_end_date_query']
+        )
+
+    def test_get_query_results_ok(self):
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+        query_test = 'SELECT * FROM `Orders` WHERE `status` = 100'
+        self.assertIsInstance(
+            self.my_generator.get_query_results(query_options_test, query_test),
+            list
+        )
+
+    @patch(
+        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.generate_tax_receipts'
+    )
+    def test_iterate_querys_results(self, patch_generate):
+        my_user = UserFactory.create()
+        my_event = EventFactory.create(user=my_user)
+        my_pay_opt = PaymentOptionsFactory.create(event=my_event)
+        my_order = OrderFactory.create(event=my_event)
+
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+
+        parent_mask = '(`Events`.`id` = `Payment_Options`.`event`)'
+        conditional_mask = ''
+        query_to_send = self.my_generator.query.format(condition_mask=conditional_mask, parent_child_mask=parent_mask)
+
+        results = self.my_generator.get_query_results(query_options_test, query_to_send)
+
+        self.my_generator.iterate_querys_results(
+            results,
+            query_options_test['localize_start_date_query'],
+            query_options_test['localize_end_date_query']
+        )
+        expected_len_payment_option = 8
+        expected_len_event = 3
+        expected_len_tax_receipt_orders = 4
+
+        self.assertEqual(len(patch_generate.call_args[0][0]), expected_len_payment_option)
+        self.assertIsInstance(patch_generate.call_args[0][0], dict)
+
+        self.assertEqual(len(patch_generate.call_args[0][1]), expected_len_event)
+        self.assertIsInstance(patch_generate.call_args[0][1], dict)
+
+        self.assertEqual(patch_generate.call_args[0][2], query_options_test['localize_start_date_query'])
+        self.assertEqual(patch_generate.call_args[0][3], query_options_test['localize_end_date_query'])
+
+        self.assertEqual(len(patch_generate.call_args[0][4]), expected_len_tax_receipt_orders)
+        self.assertIsInstance(patch_generate.call_args[0][4], dict)
+
+    @patch(
+        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.call_service'
+    )
+    def test_generate_tax_receipts(self, patch_service):
+        pay_opt = {
+            'epp_address1': '',
+            'epp_address2': '',
+            'epp_state': '',
+            'epp_name_on_account': '',
+            'epp_tax_identifier': 'ohesuvuehar',
+            'epp_zip': '',
+            'epp_country': 'AR',
+            'epp_city': ''
+        }
+        event = {'currency': u'USD', 'user_id': 1, 'id': 1}
+        tr_order = {
+            'payment_transactions_count': 1,
+            'total_tax_amount': Decimal('1.1'),
+            'base_amount': Decimal('1.1'),
+            'total_taxable_amount_with_tax_amount': Decimal('5.1')
+        }
+
+        self.my_generator.generate_tax_receipts(
+            pay_opt,
+            event,
+            dt(2020, 3, 1, 0, 0),
+            dt(2020, 4, 1, 0, 0),
+            tr_order
+        )
+        expected_len_tax_receipt_orders = 27
+        self.assertEqual(len(patch_service.call_args.args[0]['tax_receipt']), expected_len_tax_receipt_orders)
+
+    def get_epp_tax_identifier_type(self):
+        ar = 'AR'
+        ar_tax_id = 'CUIT'
+        ar_tax_ex = '20123456789'
+        br = 'BR'
+        br_tax_id_1 = 'CNPJ'
+        br_tax_id_2 = 'CPF'
+        br_tax_ex_g_eleven = '123456789011'
+        br_tax_ex_l_eleven = '1234567890'
+
+        self.assertEqual(
+            self.my_generator.get_epp_tax_identifier_type(ar, ar_tax_ex),
+            ar_tax_id
+        )
+        self.assertEqual(
+            self.my_generator.get_epp_tax_identifier_type(br, br_tax_ex_g_eleven),
+            br_tax_id_1
+        )
+        self.assertEqual(
+            self.my_generator.get_epp_tax_identifier_type(br, br_tax_ex_l_eleven),
+            br_tax_id_2
         )
