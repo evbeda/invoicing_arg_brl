@@ -24,10 +24,18 @@ from factories.users_tax_regimes import UserTaxRegimesFactory
 from invoicing_app.circuitbreaker import CircuitBreaker
 
 from invoicing_app.tax_receipt_generator import (
-    TaxReceiptGenerator
+    CountryNotConfiguredException,
+    IncorrectFormatDateException,
+    NoCountryProvidedException,
+    TaxReceiptGenerator,
+    TaxReceiptGeneratorRequest,
+    UserAndEventProvidedException
 )
 
 from decimal import Decimal
+
+path_tax_receipt_generator = 'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.'
+path_tax_receipt_request = 'invoicing_app.tax_receipt_generator.TaxReceiptGeneratorRequest.'
 
 
 class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
@@ -955,7 +963,9 @@ class TestTaxReceiptsGenerator(TestCase):
     """
         Unit test for tax_receipt_generator.TaxReceiptGenerator module
         Be carefull if you move the TaxReceiptGenerator module, 'cause the patchs
+        If you move the module, change path_tax_receipt_generator
     """
+
     def setUp(self):
         self.my_generator = TaxReceiptGenerator(dry_run=True, do_logging=False)
 
@@ -976,7 +986,7 @@ class TestTaxReceiptsGenerator(TestCase):
         self.assertEqual(str(local_date.tzinfo), tz)
 
     @patch(
-        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.get_query_results'
+        path_tax_receipt_generator + 'get_query_results'
     )
     def test_get_and_iterate_no_series_query(self, patch_query):
         """Test what we're sending to the query"""
@@ -996,7 +1006,7 @@ class TestTaxReceiptsGenerator(TestCase):
         )
 
     @patch(
-        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.iterate_querys_results'
+        path_tax_receipt_generator + 'iterate_querys_results'
     )
     def test_get_and_iterate_no_series(self, patch_iterate):
         """Test what we're sending to iterate"""
@@ -1019,7 +1029,7 @@ class TestTaxReceiptsGenerator(TestCase):
         )
 
     @patch(
-        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.get_query_results'
+        path_tax_receipt_generator + 'get_query_results'
     )
     def test_get_and_iterate_child_query(self, patch_query):
         """Test what we're sending to the query"""
@@ -1039,7 +1049,7 @@ class TestTaxReceiptsGenerator(TestCase):
         )
 
     @patch(
-        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.iterate_querys_results'
+        path_tax_receipt_generator + 'iterate_querys_results'
     )
     def test_get_and_iterate_child(self, patch_iterate):
         """Test what we're sending to iterate"""
@@ -1075,7 +1085,7 @@ class TestTaxReceiptsGenerator(TestCase):
         )
 
     @patch(
-        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.generate_tax_receipts'
+        path_tax_receipt_generator + 'generate_tax_receipts'
     )
     def test_iterate_querys_results(self, patch_generate):
         my_user = UserFactory.create()
@@ -1118,7 +1128,7 @@ class TestTaxReceiptsGenerator(TestCase):
         self.assertIsInstance(patch_generate.call_args[0][4], dict)
 
     @patch(
-        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.call_service'
+        path_tax_receipt_generator + 'call_service'
     )
     def test_generate_tax_receipts(self, patch_service):
         pay_opt = {
@@ -1171,3 +1181,97 @@ class TestTaxReceiptsGenerator(TestCase):
             self.my_generator.get_epp_tax_identifier_type(br, br_tax_ex_l_eleven),
             br_tax_id_2
         )
+
+
+class TestTaxReceiptGeneratorRequest(TestCase):
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    @patch(
+        path_tax_receipt_request + '_validate'
+    )
+    def test_init(self, patch_validate, patch_post):
+        # Here doesn't raise the user-event exception 'cause the validate and post_validate aren't executed
+        my_request = TaxReceiptGeneratorRequest(
+            country='AR',
+            user_id=123,
+            event_id=456,
+            today_date='2020-05-11'
+        )
+        self.assertTrue(patch_validate.called)
+        self.assertTrue(patch_post.called)
+
+        self.assertEqual(my_request.country, 'AR')
+        self.assertEqual(my_request.user_id, 123)
+        self.assertEqual(my_request.event_id, 456)
+        self.assertEqual(my_request.today_date, '2020-05-11')
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_validate_country(self, patch_post):
+        with self.assertRaises(CountryNotConfiguredException) as e:
+            my_request = TaxReceiptGeneratorRequest(country='CL', today_date=None, user_id=None, event_id=None)
+            self.assertEqual(
+                e.message,
+                'The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)'
+            )
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_validate_no_country(self, patch_post):
+        with self.assertRaises(NoCountryProvidedException) as e:
+            my_request = TaxReceiptGeneratorRequest(country=None, today_date=None, user_id=None, event_id=None)
+            self.assertEqual(
+                e.message,
+                'No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)'
+            )
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_validate_user_and_event(self, patch_validate):
+        with self.assertRaises(UserAndEventProvidedException) as e:
+            my_request = TaxReceiptGeneratorRequest(country='AR', today_date=None, user_id=1, event_id=1)
+            self.assertEqual(
+                e.message,
+                'Can not use event and user options in the same time'
+            )
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_validate_today_date(self, patch_post):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date='2020-05-11', user_id=None, event_id=None)
+        expected_today = dt(2020, 5, 11, 0, 0)
+        expected_end_date = dt(2020, 5, 11, 0, 0)
+        self.assertEqual(my_request.today, expected_today)
+        self.assertEqual(my_request.period_end, expected_end_date)
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_validate_no_date(self, patch_post):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date=None, user_id=None, event_id=None)
+        self.assertEqual(my_request.today.year, dt.today().year)
+        self.assertEqual(my_request.today.month, dt.today().month)
+        self.assertEqual(my_request.today.day, dt.today().day)
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_incorrect_format_date(self, patch_post):
+        with self.assertRaises(IncorrectFormatDateException) as e:
+            my_request = TaxReceiptGeneratorRequest(country='AR', today_date='21-s-2', user_id=None, event_id=None)
+            self.assertEqual(
+                e.message,
+                'Date is not matching format YYYY-MM-DD'
+            )
+
+    def test_post_validate(self):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date='2020-05-11', user_id=None, event_id=None)
+
+        self.assertEqual(my_request.period_start, dt(2020, 4, 1, 0, 0))
+        self.assertEqual(my_request.period_end, dt(2020, 5, 1, 0, 0))

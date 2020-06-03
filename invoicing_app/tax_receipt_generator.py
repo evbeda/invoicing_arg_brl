@@ -354,11 +354,11 @@ class TaxReceiptGenerator():
 
 class TaxReceiptGeneratorRequest(object):
 
-    def __init__(self, user_id, event_id, country, today_date):
+    def __init__(self, country, today_date, user_id, event_id):
         self.country = country
+        self.today_date = today_date
         self.user_id = user_id
         self.event_id = event_id
-        self.today_date = today_date
         self._validate()
         self._post_validate()
 
