@@ -60,7 +60,7 @@ class Command(BaseCommand):
 
     def handle(self, **options):
 
-        tax_generator_for_ar = TaxReceiptGenerator(
+        tax_generator = TaxReceiptGenerator(
             dry_run=options['dry_run'],
             do_logging=options['logging']
         )
@@ -80,4 +80,4 @@ class Command(BaseCommand):
         except IncorrectFormatDateException as e:
             raise CommandError(e.message)
 
-        tax_generator_for_ar.run(request)
+        tax_generator.run(request)
