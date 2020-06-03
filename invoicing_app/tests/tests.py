@@ -1307,6 +1307,74 @@ class TestTaxReceiptsGenerator(TestCase):
             br_tax_id_2
         )
 
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
+    )
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    )
+    def test_integration(self, call_new, call_old):
+        my_user_9 = UserFactory.build()
+        my_user_9.save()
+        my_event_9 = EventFactory.build(
+            user=my_user_9,
+        )
+        my_event_9.series = True
+        my_event_9.repeat_schedule = ''
+        my_event_9.save()
+
+        my_pay_opt_9 = PaymentOptionsFactory.build(
+            event=my_event_9,
+        )
+        my_pay_opt_9.save()
+        # ------------------------------------------------ #
+        my_event_child_1 = EventFactory.build(
+            user=my_user_9,
+            event_parent=my_event_9
+        )
+        my_event_child_1.save()
+
+        my_order_child_1 = OrderFactory.build(
+            event=my_event_child_1
+        )
+        my_order_child_1.save()
+        # ------------------------------------------------ #
+        my_event_child_2 = EventFactory.build(
+            user=my_user_9,
+            event_parent=my_event_9
+        )
+        my_event_child_2.save()
+
+        my_order_child_2 = OrderFactory.build(
+            event=my_event_child_2
+        )
+        my_order_child_2.save()
+        # ------------------------------------------------ #
+        my_event_child_3 = EventFactory.build(
+            user=my_user_9,
+            event_parent=my_event_9
+        )
+        my_event_child_3.save()
+
+        my_order_child_3 = OrderFactory.build(
+            event=my_event_child_3
+        )
+        my_order_child_3.save()
+        # ------------------------------------------------ #
+        expected_called = 3
+        my_request = TaxReceiptGeneratorRequest(
+            country='AR',
+            user_id=None,
+            event_id=None,
+            today_date='2020-04-11'
+        )
+        expected_called = 3
+        self.my_generator.run(my_request)
+        self.assertEqual(
+            self.my_generator.cont_tax_receipts,
+            expected_called
+        )
+
 
 class TestGenerateEntryPoint(TestCase):
     def setUp(self):

@@ -73,8 +73,7 @@ class TaxReceiptGenerator():
         if request.event_id:
             event_id = request.event_id
             self.conditional_mask = 'AND `Events`.`id` = {}'.format(event_id)
-
-        if request.user_id:
+        elif request.user_id:
             user_id = request.user_id
             self.conditional_mask = 'AND `Events`.`uid` = {}'.format(user_id)
 
@@ -380,7 +379,7 @@ class TaxReceiptGeneratorRequest(object):
                 self.today = dt.strptime(self.today_date, '%Y-%m-%d')
                 self.period_end = dt(self.today.year, self.today.month, self.today.day)
             except Exception:
-                raise IncorrectFormatDateException
+                raise IncorrectFormatDateException()
         else:
             self.today = dt.today()
 
