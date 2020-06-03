@@ -1284,7 +1284,7 @@ class TestTaxReceiptsGenerator(TestCase):
         expected_len_tax_receipt_orders = 27
         self.assertEqual(len(patch_service.call_args.args[0]['tax_receipt']), expected_len_tax_receipt_orders)
 
-    def get_epp_tax_identifier_type(self):
+    def test_get_epp_tax_identifier_type(self):
         ar = 'AR'
         ar_tax_id = 'CUIT'
         ar_tax_ex = '20123456789'
