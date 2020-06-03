@@ -1095,7 +1095,9 @@ class TestTaxReceiptsGenerator(TestCase):
 
     def test_logging(self):
         my_generator_other = TaxReceiptGenerator(dry_run=True, do_logging=True)
+        name_expected = 'financial_transactions'
         self.assertIsNotNone(my_generator_other.logger)
+        self.assertEqual(my_generator_other.logger.name, name_expected)
 
     def test_localize_date(self):
         country_code = 'AR'
@@ -1345,3 +1347,13 @@ class TestGenerateEntryPoint(TestCase):
             str(cm.exception),
             my_exc.message
         )
+
+    @patch(
+        path_tax_receipt_generator + 'run'
+    )
+    def test_run(self, patch_run):
+        call_command(generate_script_name, dry_run=True, country='AR')
+        self.assertTrue(patch_run.called)
+        self.assertEqual(patch_run.call_args[0][0].country, 'AR')
+        self.assertIsNone(patch_run.call_args[0][0].user_id)
+        self.assertIsNone(patch_run.call_args[0][0].event_id)
