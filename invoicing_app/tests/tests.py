@@ -20,7 +20,25 @@ from factories.event import EventFactory
 from factories.paymentoptions import PaymentOptionsFactory
 from factories.order import OrderFactory
 from factories.tax_receipts import TaxReceiptsFactory
+from factories.users_tax_regimes import UserTaxRegimesFactory
 from invoicing_app.circuitbreaker import CircuitBreaker
+
+from invoicing_app.tax_receipt_generator import (
+    CountryNotConfiguredException,
+    IncorrectFormatDateException,
+    NoCountryProvidedException,
+    TaxReceiptGenerator,
+    TaxReceiptGeneratorRequest,
+    UserAndEventProvidedException
+)
+
+from decimal import Decimal
+
+from django.core.management import call_command
+
+path_tax_receipt_generator = 'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.'
+path_tax_receipt_request = 'invoicing_app.tax_receipt_generator.TaxReceiptGeneratorRequest.'
+generate_script_name = 'generate_entry_point'
 
 
 class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
@@ -157,6 +175,7 @@ class TestScriptGenerateTaxReceiptsOldAndNew(TestCase):
             self.my_command_new.user_id,
             self.options['user_id']
         )
+
 
 class TestScriptGenerateTaxReceiptsOld(TestCase):
     """
@@ -848,178 +867,9 @@ class TestUpdateTaxReceipts(TestCase):
         self.payment_options = PaymentOptionsFactory.create(
             event=self.event,
         )
-
-    @patch(
-        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._check_ARG_requirements',
-    )
-    def test_update_tax_receipts_that_met_requirements_arg(self, check_arg):
-        country = 'AR'
-        self.tax_receipt.reporting_country_code = country
-        self.tax_receipt.save()
-
-        self.payment_options.epp_country = country
-        self.payment_options.save()
-
-        self.command.tax_receipts = [self.tax_receipt]
-        self.command.update_tax_receipts_that_met_requirements()
-
-        self.assertEqual(
-            check_arg.call_args[0][0],
-            self.tax_receipt
-        )
-
-        self.assertEqual(
-            check_arg.call_args[0][1],
-            self.payment_options
-        )
-
-    @patch(
-        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._check_BR_requirements',
-    )
-    def test_update_tax_receipts_that_met_requirements_br(self, check_br):
-        country = 'BR'
-        self.tax_receipt.reporting_country_code = country
-        self.tax_receipt.save()
-
-        self.payment_options.epp_country = country
-        self.payment_options.save()
-
-        self.command.tax_receipts = [self.tax_receipt]
-        self.command.update_tax_receipts_that_met_requirements()
-
-        self.assertEqual(
-            check_br.call_args[0][0],
-            self.tax_receipt
-        )
-
-        self.assertEqual(
-            check_br.call_args[0][1],
-            self.payment_options
-        )
-
-    @patch(
-        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._update_tax_receipt',
-    )
-    def test_check_ARG_requirements(self, update_tax_receipt):
-        country = 'AR'
-
-        self.tax_receipt.reporting_country_code = country
-        self.tax_receipt.recipient_address = ''
-        self.tax_receipt.recipient_name = ''
-        self.tax_receipt.recipient_tax_identifier_number = ''
-        self.tax_receipt.save()
-
-        self.payment_options.epp_country = country
-        self.payment_options.epp_address1 = 'address1'
-        self.payment_options.epp_name_on_account = 'epp_name_on_account'
-        self.payment_options.epp_zip = '2132'
-        self.payment_options.epp_city = 'city'
-        self.payment_options.epp_state = 'state'
-
-        self.payment_options.save()
-
-        self.command._check_ARG_requirements(self.tax_receipt, self.payment_options)
-
-        self.assertEqual(
-            update_tax_receipt.call_args[0][0].recipient_address,
-            self.payment_options.epp_address1
-        )
-
-        self.assertEqual(
-            update_tax_receipt.call_args[0][0].recipient_tax_identifier_number,
-            self.payment_options.epp_tax_identifier
-        )
-
-        self.assertEqual(
-            update_tax_receipt.call_args[0][0].recipient_name,
-            self.payment_options.epp_name_on_account
-        )
-
-    @patch(
-        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._update_tax_receipt',
-    )
-    def test_check_BR_requirements_zip_cpf(self, update_tax_receipt):
-        country = 'BR'
-
-        self.tax_receipt.reporting_country_code = country
-        self.tax_receipt.recipient_postal_code = ''
-        self.tax_receipt.save()
-
-        self.payment_options.epp_country = country
-        self.payment_options.epp_address1 = 'address1'
-        self.payment_options.epp_name_on_account = 'epp_name_on_account'
-        self.payment_options.epp_zip = '2132'
-        self.payment_options.epp_city = 'city'
-        self.payment_options.epp_state = 'state'
-        self.payment_options.epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(11))
-
-        self.payment_options.save()
-
-        self.command._check_BR_requirements(self.tax_receipt, self.payment_options)
-
-        self.assertEqual(
-            update_tax_receipt.call_args[0][0].recipient_postal_code,
-            self.payment_options.epp_zip
-        )
-
-    @patch(
-        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._update_tax_receipt',
-    )
-    def test_check_BR_requirements_zip_cnpj(self, update_tax_receipt):
-        country = 'BR'
-
-        self.tax_receipt.reporting_country_code = country
-        self.tax_receipt.recipient_postal_code = ''
-        self.tax_receipt.save()
-
-        self.payment_options.epp_country = country
-        self.payment_options.epp_address1 = 'address1'
-        self.payment_options.epp_name_on_account = 'epp_name_on_account'
-        self.payment_options.epp_zip = '2132'
-        self.payment_options.epp_city = 'city'
-        self.payment_options.epp_state = 'state'
-        self.payment_options.epp_tax_identifier = ''.join(random.choice(string.lowercase) for _ in range(12))
-
-        self.payment_options.save()
-
-        self.command._check_BR_requirements(self.tax_receipt, self.payment_options)
-
-        self.assertEqual(
-            update_tax_receipt.call_args[0][0].recipient_postal_code,
-            self.payment_options.epp_zip
-        )
-
-    @patch(
-        'invoicing_app.management.commands.update_incomplete_tax_receipts.Command._log_due_to_missing_to_info',
-    )
-    def test_check_ARG_requirements_error(self, log_due_to_missing_to_info):
-        country = 'AR'
-        self.command.verbose = True
-
-        self.tax_receipt.reporting_country_code = country
-        self.tax_receipt.recipient_address = ''
-        self.tax_receipt.recipient_name = ''
-        self.tax_receipt.recipient_tax_identifier_number = ''
-        self.tax_receipt.save()
-
-        self.payment_options.epp_country = country
-        self.payment_options.epp_name_on_account = 'epp_name_on_account'
-        self.payment_options.epp_zip = '2132'
-        self.payment_options.epp_city = 'city'
-        self.payment_options.epp_state = 'state'
-
-        self.payment_options.save()
-
-        self.command._check_ARG_requirements(self.tax_receipt, self.payment_options)
-
-        self.assertEqual(
-            log_due_to_missing_to_info.call_args[0][0],
-            self.tax_receipt.id
-        )
-
-        self.assertEqual(
-            log_due_to_missing_to_info.call_args[0][1],
-            self.payment_options.id
+        self.user_tax_regime = UserTaxRegimesFactory.create(
+            user_id=self.tax_receipt.user_id,
+            tax_regime_type_id=1,
         )
 
     @patch(
@@ -1110,3 +960,468 @@ class TestUpdateTaxReceipts(TestCase):
             self.command.count,
             1
         )
+
+
+class TestTaxReceiptGeneratorRequest(TestCase):
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    @patch(
+        path_tax_receipt_request + '_validate'
+    )
+    def test_init(self, patch_validate, patch_post):
+        # Here doesn't raise the user-event exception 'cause the validate and post_validate aren't executed
+        my_request = TaxReceiptGeneratorRequest(
+            country='AR',
+            user_id=123,
+            event_id=456,
+            today_date='2020-05-11'
+        )
+        self.assertTrue(patch_validate.called)
+        self.assertTrue(patch_post.called)
+
+        self.assertEqual(my_request.country, 'AR')
+        self.assertEqual(my_request.user_id, 123)
+        self.assertEqual(my_request.event_id, 456)
+        self.assertEqual(my_request.today_date, '2020-05-11')
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_validate_country(self, patch_post):
+        with self.assertRaises(CountryNotConfiguredException) as e:
+            my_request = TaxReceiptGeneratorRequest(country='CL', today_date=None, user_id=None, event_id=None)
+            self.assertEqual(
+                e.message,
+                'The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)'
+            )
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_validate_no_country(self, patch_post):
+        with self.assertRaises(NoCountryProvidedException) as e:
+            my_request = TaxReceiptGeneratorRequest(country=None, today_date=None, user_id=None, event_id=None)
+            self.assertEqual(
+                e.message,
+                'No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)'
+            )
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_validate_user_and_event(self, patch_validate):
+        with self.assertRaises(UserAndEventProvidedException) as e:
+            my_request = TaxReceiptGeneratorRequest(country='AR', today_date=None, user_id=1, event_id=1)
+            self.assertEqual(
+                e.message,
+                'Can not use event and user options in the same time'
+            )
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_validate_today_date(self, patch_post):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date='2020-05-11', user_id=None, event_id=None)
+        expected_today = dt(2020, 5, 11, 0, 0)
+        expected_end_date = dt(2020, 5, 11, 0, 0)
+        self.assertEqual(my_request.today, expected_today)
+        self.assertEqual(my_request.period_end, expected_end_date)
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_validate_no_date(self, patch_post):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date=None, user_id=None, event_id=None)
+        self.assertEqual(my_request.today.year, dt.today().year)
+        self.assertEqual(my_request.today.month, dt.today().month)
+        self.assertEqual(my_request.today.day, dt.today().day)
+
+    @patch(
+        path_tax_receipt_request + '_post_validate'
+    )
+    def test_incorrect_format_date(self, patch_post):
+        with self.assertRaises(IncorrectFormatDateException) as e:
+            my_request = TaxReceiptGeneratorRequest(country='AR', today_date='21-s-2', user_id=None, event_id=None)
+            self.assertEqual(
+                e.message,
+                'Date is not matching format YYYY-MM-DD'
+            )
+
+    def test_post_validate(self):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date='2020-05-11', user_id=None, event_id=None)
+
+        self.assertEqual(my_request.period_start, dt(2020, 4, 1, 0, 0))
+        self.assertEqual(my_request.period_end, dt(2020, 5, 1, 0, 0))
+
+
+class TestTaxReceiptsGenerator(TestCase):
+    """
+        Unit test for tax_receipt_generator.TaxReceiptGenerator module
+        Be carefull if you move the TaxReceiptGenerator module, 'cause the patchs
+        If you move the module, change path_tax_receipt_generator
+    """
+
+    def setUp(self):
+        self.my_generator = TaxReceiptGenerator(dry_run=True, do_logging=False)
+
+    def test_init(self):
+        self.assertTrue(self.my_generator.dry_run)
+        self.assertFalse(self.my_generator.do_logging)
+        self.assertIsInstance(self.my_generator.query, str)
+
+    @patch(
+        path_tax_receipt_generator + 'get_and_iterate_no_series_events'
+    )
+    @patch(
+        path_tax_receipt_generator + 'get_and_iterate_child_events'
+    )
+    def test_run_calls(self, patch_childs, patch_no_series):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date=None, user_id=None, event_id=None)
+        self.my_generator.run(my_request)
+        self.assertTrue(patch_childs.called)
+        self.assertTrue(patch_no_series.called)
+
+    def test_run_w_user(self):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date=None, user_id=1, event_id=None)
+        self.my_generator.run(my_request)
+        self.assertEqual(self.my_generator.conditional_mask, 'AND `Events`.`uid` = 1')
+
+    def test_run_w_event(self):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date=None, user_id=None, event_id=1)
+        self.my_generator.run(my_request)
+        self.assertEqual(self.my_generator.conditional_mask, 'AND `Events`.`id` = 1')
+
+    def test_logging(self):
+        my_generator_other = TaxReceiptGenerator(dry_run=True, do_logging=True)
+        name_expected = 'financial_transactions'
+        self.assertIsNotNone(my_generator_other.logger)
+        self.assertEqual(my_generator_other.logger.name, name_expected)
+
+    def test_localize_date(self):
+        country_code = 'AR'
+        tz = 'America/Argentina/Buenos_Aires'
+        date = dt(2020, 03, 10, 0, 0)
+        local_date = self.my_generator.localize_date(country_code, date)
+
+        self.assertEqual(local_date.year, date.year)
+        self.assertEqual(local_date.month, date.month)
+        self.assertEqual(local_date.day, date.day)
+        self.assertEqual(str(local_date.tzinfo), tz)
+
+    @patch(
+        path_tax_receipt_generator + 'get_query_results'
+    )
+    def test_get_and_iterate_no_series_query(self, patch_query):
+        """Test what we're sending to the query"""
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+        parent_mask = '(`Events`.`id` = `Payment_Options`.`event`)'
+        self.my_generator.get_and_iterate_no_series_events(query_options_test)
+
+        self.assertEqual(patch_query.call_args[0][0], query_options_test)
+        self.assertIn(
+            parent_mask,
+            patch_query.call_args[0][1]
+        )
+
+    @patch(
+        path_tax_receipt_generator + 'iterate_querys_results'
+    )
+    def test_get_and_iterate_no_series(self, patch_iterate):
+        """Test what we're sending to iterate"""
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+        self.my_generator.get_and_iterate_no_series_events(query_options_test)
+
+        self.assertIsInstance(patch_iterate.call_args[0][0], list)
+        self.assertEqual(
+            patch_iterate.call_args[0][1],
+            query_options_test['localize_start_date_query']
+        )
+        self.assertEqual(
+            patch_iterate.call_args[0][2],
+            query_options_test['localize_end_date_query']
+        )
+
+    @patch(
+        path_tax_receipt_generator + 'get_query_results'
+    )
+    def test_get_and_iterate_child_query(self, patch_query):
+        """Test what we're sending to the query"""
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+        child_mask = '(`Events`.`event_parent` = `Payment_Options`.`event`)'
+        self.my_generator.get_and_iterate_child_events(query_options_test)
+
+        self.assertEqual(patch_query.call_args[0][0], query_options_test)
+        self.assertIn(
+            child_mask,
+            patch_query.call_args[0][1]
+        )
+
+    @patch(
+        path_tax_receipt_generator + 'iterate_querys_results'
+    )
+    def test_get_and_iterate_child(self, patch_iterate):
+        """Test what we're sending to iterate"""
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+        self.my_generator.get_and_iterate_child_events(query_options_test)
+
+        self.assertIsInstance(patch_iterate.call_args[0][0], list)
+        self.assertEqual(
+            patch_iterate.call_args[0][1],
+            query_options_test['localize_start_date_query']
+        )
+        self.assertEqual(
+            patch_iterate.call_args[0][2],
+            query_options_test['localize_end_date_query']
+        )
+
+    def test_get_query_results_ok(self):
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+        query_test = 'SELECT * FROM `Orders` WHERE `status` = 100'
+        self.assertIsInstance(
+            self.my_generator.get_query_results(query_options_test, query_test),
+            list
+        )
+
+    @patch(
+        path_tax_receipt_generator + 'generate_tax_receipts'
+    )
+    def test_iterate_querys_results(self, patch_generate):
+        my_user = UserFactory.create()
+        my_event = EventFactory.create(user=my_user)
+        my_pay_opt = PaymentOptionsFactory.create(event=my_event)
+        my_order = OrderFactory.create(event=my_event)
+
+        query_options_test = {
+            'localize_end_date_query': '2020-04-01',
+            'localize_start_date_query': '2020-03-01',
+            'declarable_tax_receipt_countries_query': 'AR',
+            'status_query': 100,
+        }
+
+        parent_mask = '(`Events`.`id` = `Payment_Options`.`event`)'
+        conditional_mask = ''
+        query_to_send = self.my_generator.query.format(condition_mask=conditional_mask, parent_child_mask=parent_mask)
+
+        results = self.my_generator.get_query_results(query_options_test, query_to_send)
+
+        self.my_generator.iterate_querys_results(
+            results,
+            query_options_test['localize_start_date_query'],
+            query_options_test['localize_end_date_query']
+        )
+        expected_len_payment_option = 8
+        expected_len_event = 3
+        expected_len_tax_receipt_orders = 4
+
+        self.assertEqual(len(patch_generate.call_args[0][0]), expected_len_payment_option)
+        self.assertIsInstance(patch_generate.call_args[0][0], dict)
+
+        self.assertEqual(len(patch_generate.call_args[0][1]), expected_len_event)
+        self.assertIsInstance(patch_generate.call_args[0][1], dict)
+
+        self.assertEqual(patch_generate.call_args[0][2], query_options_test['localize_start_date_query'])
+        self.assertEqual(patch_generate.call_args[0][3], query_options_test['localize_end_date_query'])
+
+        self.assertEqual(len(patch_generate.call_args[0][4]), expected_len_tax_receipt_orders)
+        self.assertIsInstance(patch_generate.call_args[0][4], dict)
+
+    @patch(
+        path_tax_receipt_generator + 'call_service'
+    )
+    def test_generate_tax_receipts(self, patch_service):
+        pay_opt = {
+            'epp_address1': '',
+            'epp_address2': '',
+            'epp_state': '',
+            'epp_name_on_account': '',
+            'epp_tax_identifier': 'ohesuvuehar',
+            'epp_zip': '',
+            'epp_country': 'AR',
+            'epp_city': ''
+        }
+        event = {'currency': u'USD', 'user_id': 1, 'id': 1}
+        tr_order = {
+            'payment_transactions_count': 1,
+            'total_tax_amount': Decimal('1.1'),
+            'base_amount': Decimal('1.1'),
+            'total_taxable_amount_with_tax_amount': Decimal('5.1')
+        }
+
+        self.my_generator.generate_tax_receipts(
+            pay_opt,
+            event,
+            dt(2020, 3, 1, 0, 0),
+            dt(2020, 4, 1, 0, 0),
+            tr_order
+        )
+        expected_len_tax_receipt_orders = 27
+        self.assertEqual(len(patch_service.call_args.args[0]['tax_receipt']), expected_len_tax_receipt_orders)
+
+    def test_get_epp_tax_identifier_type(self):
+        ar = 'AR'
+        ar_tax_id = 'CUIT'
+        ar_tax_ex = '20123456789'
+        br = 'BR'
+        br_tax_id_1 = 'CNPJ'
+        br_tax_id_2 = 'CPF'
+        br_tax_ex_g_eleven = '123456789011'
+        br_tax_ex_l_eleven = '1234567890'
+
+        self.assertEqual(
+            self.my_generator.get_epp_tax_identifier_type(ar, ar_tax_ex),
+            ar_tax_id
+        )
+        self.assertEqual(
+            self.my_generator.get_epp_tax_identifier_type(br, br_tax_ex_g_eleven),
+            br_tax_id_1
+        )
+        self.assertEqual(
+            self.my_generator.get_epp_tax_identifier_type(br, br_tax_ex_l_eleven),
+            br_tax_id_2
+        )
+
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
+    )
+    @patch(
+        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    )
+    def test_integration(self, call_new, call_old):
+        my_user_9 = UserFactory.build()
+        my_user_9.save()
+        my_event_9 = EventFactory.build(
+            user=my_user_9,
+        )
+        my_event_9.series = True
+        my_event_9.repeat_schedule = ''
+        my_event_9.save()
+
+        my_pay_opt_9 = PaymentOptionsFactory.build(
+            event=my_event_9,
+        )
+        my_pay_opt_9.save()
+        # ------------------------------------------------ #
+        my_event_child_1 = EventFactory.build(
+            user=my_user_9,
+            event_parent=my_event_9
+        )
+        my_event_child_1.save()
+
+        my_order_child_1 = OrderFactory.build(
+            event=my_event_child_1
+        )
+        my_order_child_1.save()
+        # ------------------------------------------------ #
+        my_event_child_2 = EventFactory.build(
+            user=my_user_9,
+            event_parent=my_event_9
+        )
+        my_event_child_2.save()
+
+        my_order_child_2 = OrderFactory.build(
+            event=my_event_child_2
+        )
+        my_order_child_2.save()
+        # ------------------------------------------------ #
+        my_event_child_3 = EventFactory.build(
+            user=my_user_9,
+            event_parent=my_event_9
+        )
+        my_event_child_3.save()
+
+        my_order_child_3 = OrderFactory.build(
+            event=my_event_child_3
+        )
+        my_order_child_3.save()
+        # ------------------------------------------------ #
+        expected_called = 3
+        my_request = TaxReceiptGeneratorRequest(
+            country='AR',
+            user_id=None,
+            event_id=None,
+            today_date='2020-04-11'
+        )
+        expected_called = 3
+        self.my_generator.run(my_request)
+        self.assertEqual(
+            self.my_generator.cont_tax_receipts,
+            expected_called
+        )
+
+
+class TestGenerateEntryPoint(TestCase):
+    def setUp(self):
+        pass
+
+    def test_not_configured_country(self):
+        my_exc = CountryNotConfiguredException()
+        with self.assertRaises(CommandError) as cm:
+            call_command(generate_script_name, dry_run=True, country='CL')
+        self.assertEqual(
+            str(cm.exception),
+            my_exc.message
+        )
+
+    def test_user_and_event(self):
+        my_exc = UserAndEventProvidedException()
+        with self.assertRaises(CommandError) as cm:
+            call_command(generate_script_name, dry_run=True, country='AR', user_id=1, event_id=1)
+        self.assertEqual(
+            str(cm.exception),
+            my_exc.message
+        )
+
+    def test_no_country(self):
+        my_exc = NoCountryProvidedException()
+        with self.assertRaises(CommandError) as cm:
+            call_command(generate_script_name, dry_run=True)
+        self.assertEqual(
+            str(cm.exception),
+            my_exc.message
+        )
+
+    def test_date_incorrect(self):
+        my_exc = IncorrectFormatDateException()
+        with self.assertRaises(CommandError) as cm:
+            call_command(generate_script_name, dry_run=True, country='AR', today_date='12-s-12')
+        self.assertEqual(
+            str(cm.exception),
+            my_exc.message
+        )
+
+    @patch(
+        path_tax_receipt_generator + 'run'
+    )
+    def test_run(self, patch_run):
+        call_command(generate_script_name, dry_run=True, country='AR')
+        self.assertTrue(patch_run.called)
+        self.assertEqual(patch_run.call_args[0][0].country, 'AR')
+        self.assertIsNone(patch_run.call_args[0][0].user_id)
+        self.assertIsNone(patch_run.call_args[0][0].event_id)

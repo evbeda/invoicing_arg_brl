@@ -1,9 +1,12 @@
+from datetime import datetime
 from django.core.management.base import BaseCommand
 from django.db import connections
-from invoicing_app.models import PaymentOptions, Event, TaxReceipt
+from invoicing_app.models import PaymentOptions, Event, TaxReceipt, User, Users_Tax_Regimes
+from invoicing_app.slack_module import SlackConnection
 import logging
 from optparse import make_option
 
+SLACK_API_TOKEN = ""
 
 class Command(BaseCommand):
     help = ('Change status of the tax receipts that have every requirement from INCOMPLETE to PENDING')
@@ -37,7 +40,6 @@ class Command(BaseCommand):
             "recipient_tax_identifier_number": "epp_tax_identifier",
             "recipient_postal_code": "epp_zip",
             "recipient_city": "epp_city",
-            "tax_regime_type_id": "",
         }
         self.arg_requirements = base_requirements
         self.br_requirements = base_requirements + ("recipient_postal_code",)
@@ -47,7 +49,7 @@ class Command(BaseCommand):
         self.verbose = False
         self.dry_run = False
         self.invoicing = 'default'
-        self.billing = 'billing_local'
+        self.billing = 'default'
         self.count = 0
         super(Command, self).__init__(*args, **kwargs)
 
@@ -60,7 +62,14 @@ class Command(BaseCommand):
             self.billing = 'billing_EB'
 
         if self.verbose:
+            self._send_slack_notification_message(
+                """
+                The update tax receipts process has started.
+                """
+            )
             self._log_hosts_being_used()
+            start_date = datetime.now()
+
         self.logger.info("Finding tax receipts that meet requirements criteria")
         self.find_incomplete_tax_receipts()
         self.update_tax_receipts_that_met_requirements()
@@ -72,6 +81,15 @@ class Command(BaseCommand):
             self.logger.info("Updated {} tax receipts to PENDING".format(self.count))
             self.logger.info("Update process completed.")
 
+        if self.verbose:
+            self._send_slack_notification_message(
+                """
+                The update tax receipts process has finished.
+                Number of tax receipts that are now PENDING: {}
+                Start date: {}
+                End date: {}
+                """.format(self.count, start_date, datetime.now())
+            )
     def find_incomplete_tax_receipts(self):
         try:
             self.tax_receipts = TaxReceipt.objects.using(self.billing)\
@@ -110,7 +128,26 @@ class Command(BaseCommand):
                         po_attribute
                     )
                 return
-        self._update_tax_receipt(tax_receipt)
+        # WE ALSO HAVE TO CHECK FOR TAX_RECEIPT.TAX_REGIME_TYPE_ID THAT COMES FROM A DIFFERENT TABLE.
+        try:
+            tax_regime_query = Users_Tax_Regimes.objects\
+                .using(self.billing)\
+                .filter(user_id=tax_receipt.user_id, tax_regime_type_id__isnull=False)\
+                .values('tax_regime_type_id')
+            for values_dict in tax_regime_query:
+                tax_regime = values_dict.get('tax_regime_type_id', '')
+                if self.__check_single_requirement(tax_regime):
+                    setattr(tax_receipt, 'tax_regime_type_id', tax_regime)
+                    self._update_tax_receipt(tax_receipt)
+                    return
+
+            if self.verbose:
+                self.logger.info(
+                    "Couldn't find a user in Users_Tax_Regimes that is associated to TaxReceipt.user_id={}"
+                    .format(tax_receipt.user_id)
+                )
+        except Exception as e:
+            self._log_exception(e)
 
     def _check_BR_requirements(self, tax_receipt, payment_option):
         # CHECK IF BR TAX AUTHORITY IS CPNJ OR CPF, BECAUSE THEY USE DIFFERENT REQUIREMENTS.
@@ -147,7 +184,7 @@ class Command(BaseCommand):
             self._update_tax_receipt(tax_receipt)
 
     def __check_single_requirement(self, po_attr):
-        return po_attr != ''
+        return True if po_attr else False
 
     def _update_tax_receipt(self, tax_receipt):
         if self.verbose:
@@ -177,7 +214,7 @@ class Command(BaseCommand):
         self.logger.\
             info('''
                     Couldn't update status of tax receipt with id: {} to PENDING,
-                    due to missing information on its associated payment option with id: {}.
+                    due to missing information on its associated PaymentOption with id: {}.
                     The field that failed is PaymentOption.{} 
                     Its value is: '{}', and it needs to be completed'''
                  .format(tax_id,
@@ -204,6 +241,10 @@ class Command(BaseCommand):
         ch.setFormatter(formatter)
         logger.addHandler(ch)
 
+    def _send_slack_notification_message(self, message):
+        slack = SlackConnection(token=SLACK_API_TOKEN)
+        channel = '#invoicing_arg_brl'
+        slack.post_message(channel, message)
 
 class TaxReceiptStatuses:
     @staticmethod
