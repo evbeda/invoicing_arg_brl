@@ -216,26 +216,26 @@ class Command(BaseCommand):
             'declarable_tax_receipt_countries_query': self.declarable_tax_receipt_countries,
             'status_query': 100,
         }
-        # if not self.dry_run:
-        #     self._send_slack_notification_message(
-        #         """
-        #         The generation script has started.
-        #         Country: {}
-        #         Start date: {}
-        #         End date: {}
-        #         """.format(options['country'], localize_start_date, localize_end_date)
-        #     )
-        # self.logger.info("------Starting generate tax receipts------")
-        # self.logger.info("start: {}".format(self.period_start))
-        # self.logger.info("end: {}".format(self.period_end))
-        # self.get_and_iterate_no_series_events(query_options)
-        # self.get_and_iterate_child_events(query_options)
-        # self.logger.info("------End Generation new tax receipts------")
-        # self.logger.info("------Ending generate tax receipts------")
-        # if not self.dry_run:
-        #     self._send_slack_notification_message(
-        #         'The generation script ran successfully with {} errors'.format(self.error_cont)
-        #     )
+        if not self.dry_run:
+            self._send_slack_notification_message(
+                """
+                The generation script has started.
+                Country: {}
+                Start date: {}
+                End date: {}
+                """.format(options['country'], localize_start_date, localize_end_date)
+            )
+        self.logger.info("------Starting generate tax receipts------")
+        self.logger.info("start: {}".format(self.period_start))
+        self.logger.info("end: {}".format(self.period_end))
+        self.get_and_iterate_no_series_events(query_options)
+        self.get_and_iterate_child_events(query_options)
+        self.logger.info("------End Generation new tax receipts------")
+        self.logger.info("------Ending generate tax receipts------")
+        if not self.dry_run:
+            self._send_slack_notification_message(
+                'The generation script ran successfully with {} errors'.format(self.error_cont)
+            )
         self.send_email_report()
 
     def _log_exception(self, e, event_id=None, quiet=False):
@@ -529,6 +529,6 @@ class Command(BaseCommand):
                 'gtf': report_data['gtf'],
             }
         )
-        print(rendered)
+        # print(rendered)
         # mail = MyEmailInstance()
         # mail.send_email(renderd)
