@@ -36,6 +36,8 @@ from decimal import Decimal
 
 from django.core.management import call_command
 
+from invoicing_app.slack_module import SlackConnection
+
 path_tax_receipt_generator = 'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.'
 path_tax_receipt_request = 'invoicing_app.tax_receipt_generator.TaxReceiptGeneratorRequest.'
 generate_script_name = 'generate_entry_point'
@@ -1307,13 +1309,20 @@ class TestTaxReceiptsGenerator(TestCase):
             br_tax_id_2
         )
 
-    @patch(
-        'invoicing_app.management.commands.generate_tax_receipts_old.Command.call_service',
+    @patch.object(
+        TaxReceiptGenerator, 'localize_date', return_value='2020-04-01'
     )
-    @patch(
-        'invoicing_app.management.commands.generate_tax_receipts_new.Command.call_service',
+    @patch.object(
+        SlackConnection, 'post_message'
     )
-    def test_integration(self, call_new, call_old):
+    def test_slack_message(self, patch_slack, patch_date):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date=None, user_id=None, event_id=None)
+        generator = TaxReceiptGenerator(dry_run=False, do_logging=False)
+        generator.run(my_request)
+        call_expected = 2
+        self.assertEqual(patch_slack.call_count, call_expected)
+
+    def test_integration(self):
         my_user_9 = UserFactory.build()
         my_user_9.save()
         my_event_9 = EventFactory.build(
