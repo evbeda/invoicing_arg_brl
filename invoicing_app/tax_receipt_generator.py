@@ -14,7 +14,7 @@ from invoicing_app.slack_module import SlackConnection
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 NAME_LOGGING = 'generate_tax_receipts'
-SLACK_TOKEN = 'xoxb-1169167404752-1169450015440-rRqeP2lTFZBas9ST2q74LosF'
+SLACK_TOKEN = ''
 SLACK_CHANNEL = '#invoicing_arg_brl'
 
 class TaxReceiptGenerator():
