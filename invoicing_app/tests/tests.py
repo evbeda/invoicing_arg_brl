@@ -40,7 +40,6 @@ from invoicing_app.slack_module import SlackConnection
 from invoicing_app.mail_report_module import GenerationProccessMailReport
 
 path_tax_receipt_generator = 'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.'
-path_tax_receipt_request = 'invoicing_app.tax_receipt_generator.TaxReceiptGeneratorRequest.'
 generate_script_name = 'generate_entry_point'
 
 
@@ -1446,7 +1445,7 @@ class TestGenerateEntryPoint(TestCase):
         )
 
     @patch(
-        path_tax_receipt_generator + 'run'
+        'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.run'
     )
     def test_run(self, patch_run):
         call_command(generate_script_name, dry_run=True, country='AR')
