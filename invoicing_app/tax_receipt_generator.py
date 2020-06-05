@@ -15,7 +15,7 @@ from invoicing_app.mail_report_module import GenerationProccessMailReport
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 NAME_LOGGING = 'generate_tax_receipts'
-SLACK_TOKEN = 'xoxb-1169167404752-1169450015440-5NwkeVaVPgvEv9DJYrFpp0IM'
+SLACK_TOKEN = ''
 SLACK_CHANNEL = '#invoicing_arg_brl'
 
 class TaxReceiptGenerator():

@@ -1307,6 +1307,10 @@ class TestTaxReceiptsGenerator(TestCase):
             self.my_generator.get_epp_tax_identifier_type(br, br_tax_ex_l_eleven),
             br_tax_id_2
         )
+        self.assertEqual(
+            self.my_generator.get_epp_tax_identifier_type('CL', '213'),
+            ''
+        )
 
     @patch.object(
         TaxReceiptGenerator, 'localize_date', return_value='2020-04-01'
