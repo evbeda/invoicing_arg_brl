@@ -12,8 +12,10 @@ omit =
     invoicing_app/management/commands/update_incomplete_tax_receipts.py
     invoicing_app/management/commands/create_dummy_data.py
     invoicing_app/management/commands/generate_tax_receipts.py
+    invoicing_app/management/commands/declare_pending_tax_receipts.py
     invoicing_app/tests/factories/tax_receipts.py
     invoicing_app/slack_module.py
+    invoicing_app/mail_reporter_module.py
     invoicing/*
     manage.py
 

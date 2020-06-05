@@ -37,6 +37,7 @@ from decimal import Decimal
 from django.core.management import call_command
 
 from invoicing_app.slack_module import SlackConnection
+from invoicing_app.mail_report_module import GenerationProccessMailReport
 
 path_tax_receipt_generator = 'invoicing_app.tax_receipt_generator.TaxReceiptGenerator.'
 path_tax_receipt_request = 'invoicing_app.tax_receipt_generator.TaxReceiptGeneratorRequest.'
@@ -1319,6 +1320,25 @@ class TestTaxReceiptsGenerator(TestCase):
         generator.run(my_request)
         call_expected = 2
         self.assertEqual(patch_slack.call_count, call_expected)
+
+    @patch.object(
+        GenerationProccessMailReport, 'generation_send_email_report'
+    )
+    @patch.object(
+        TaxReceiptGenerator, 'localize_date', return_value='2020-04-01'
+    )
+    @patch.object(
+        SlackConnection, 'post_message'
+    )
+    def test_email_report(self, patch_slack, patch_date, patch_mail):
+        my_request = TaxReceiptGeneratorRequest(country='AR', today_date=None, user_id=None, event_id=None)
+        generator = TaxReceiptGenerator(dry_run=False, do_logging=False)
+        generator.run(my_request)
+        expected_called = 1
+        self.assertEqual(patch_mail.call_count, expected_called)
+        self.assertIsInstance(patch_mail.call_args[0][0], unicode)
+        self.assertIsInstance(patch_mail.call_args[0][1], dt)
+        self.assertIsInstance(patch_mail.call_args[0][2], dt)
 
     def test_integration(self):
         my_user_9 = UserFactory.build()

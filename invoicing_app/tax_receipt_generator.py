@@ -11,10 +11,11 @@ from django.db import connection
 from decimal import Decimal
 
 from invoicing_app.slack_module import SlackConnection
+from invoicing_app.mail_report_module import GenerationProccessMailReport
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 NAME_LOGGING = 'generate_tax_receipts'
-SLACK_TOKEN = ''
+SLACK_TOKEN = 'xoxb-1169167404752-1169450015440-5NwkeVaVPgvEv9DJYrFpp0IM'
 SLACK_CHANNEL = '#invoicing_arg_brl'
 
 class TaxReceiptGenerator():
@@ -27,6 +28,7 @@ class TaxReceiptGenerator():
         self.cont_tax_receipts = 0
         self.error_cont = 0
         self.slack_notification = SlackConnection(SLACK_TOKEN)
+        self.mail_report = GenerationProccessMailReport()
         logger = logging.getLogger(NAME_LOGGING)
         logger.setLevel(logging.DEBUG)
         ch = logging.StreamHandler()
@@ -125,6 +127,11 @@ class TaxReceiptGenerator():
                     - Tax receipts generated: {generated}
                     - Errors: {errors}
                 '''.format(generated=self.cont_tax_receipts, errors=self.error_cont)
+            )
+            self.mail_report.generation_send_email_report(
+                request.country,
+                request.period_start,
+                request.period_end
             )
 
     def localize_date(self, country_code, date):
