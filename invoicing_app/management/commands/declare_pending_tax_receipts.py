@@ -17,6 +17,7 @@ try:
     from invoicing import settings
     from django.core.management.base import BaseCommand, CommandError
     from invoicing_app.models import TaxReceipt
+    from invoicing_app.mail_report_module import DeclarationProccessMailReport
     # from invoicing_app.models import TaxReceiptStatuses
 except Exception:
     # For production
@@ -106,6 +107,7 @@ class Command(BaseCommand):
         self.currency = None
         self.event_id = None
         self.user_id = None
+        self.mail_report = DeclarationProccessMailReport()
 
         super(Command, self).__init__(*args, **kwargs)
 
@@ -163,7 +165,10 @@ class Command(BaseCommand):
         self.declare_pending_tax_receipts()
         self.logger.info("------Ending declare pending tax receipts------")
         self.logger.info("------Starting generate and send report------")
-        self.send_email_report()
+        try:
+            self.mail_report.send_email_report(self.start_date_period, self.end_date_period, self.currency)
+        except Exception:
+            self.logger.error('The report wont be sended because the currency was not specified')
         self.logger.info("------Ending generate and send report------")
         self.logger.info("------Ending Process------")
 
@@ -214,28 +219,3 @@ class Command(BaseCommand):
         formatter = logging.Formatter("%(name)-12s: %(levelname)-8s %(message)s")
         console.setFormatter(formatter)
         self.logger.addHandler(console)
-
-
-    def send_email_report(self):
-        start_date = self.start_date_period - relativedelta(days=1)
-        end_date = self.end_date_period - relativedelta(seconds=1)
-
-        report_data = TaxReceipt.objects.filter(
-            currency=self.currency,
-            start_date_period__range=(start_date, end_date),
-            # status_id=TaxReceiptStatuses.get_id_from_name("PROCESSED"),
-            status_id=3,
-        ).aggregate(
-            count_id=Count('id'),
-            declared_gtf=Sum('total_taxable_amount') / 100,
-        )
-
-        rendered = render_to_string(
-            'declaration_template.html',
-            {
-                'period': start_date.strftime(DATE_FORMAT)+' - ' +end_date.strftime(DATE_FORMAT),
-                'currency': self.currency,
-                'declared_gtf': report_data['declared_gtf'],
-            }
-        )
-        print(rendered)
