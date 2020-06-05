@@ -8,10 +8,19 @@ import pytz
 from datetime import datetime as dt
 from dateutil.relativedelta import relativedelta
 
+from django.db.models import (
+    Count,
+    Sum,
+)
+
+from django.template.loader import render_to_string
+
 try:
     # Local
     from invoicing import settings
     from django.core.management.base import BaseCommand, CommandError
+    from invoicing_app.models import TaxReceipt
+    from invoicing_app.slack_module import SlackConnection
 except Exception:
     # For production
     from django.conf import settings
@@ -22,11 +31,14 @@ except Exception:
     from permissions.noninteractive import get_noninteractive_token
     from ebapps import payments as payment_service_constants
     from ebgeo.timezone import tzinfo
+    from billing_service.models.tax_receipts import TaxReceipt
 
 from django.db import connection
-from invoicing_app.slack_module import SlackConnection
+
+
 
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+DATE_FORMAT_REPORT = "%Y-%m-%d"
 # Token for a test channel in a test workspace
 SLACK_API_TOKEN = ''
 
@@ -224,6 +236,7 @@ class Command(BaseCommand):
             self._send_slack_notification_message(
                 'The generation script ran successfully with {} errors'.format(self.error_cont)
             )
+        self.send_email_report()
 
     def _log_exception(self, e, event_id=None, quiet=False):
         message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format(
@@ -487,3 +500,35 @@ class Command(BaseCommand):
         slack = SlackConnection(token=SLACK_API_TOKEN)
         channel = '#invoicing_arg_brl'
         slack.post_message(channel, message)
+
+    def send_email_report(self):
+        if self.declarable_tax_receipt_countries == 'AR':
+            currency = 'ARS'
+        elif self.declarable_tax_receipt_countries == 'BR':
+            currency = 'BRL'
+
+        start_date = self.period_start - relativedelta(days=1)
+        end_date = self.period_end - relativedelta(seconds=1)
+
+        report_data = TaxReceipt.objects.filter(
+            currency=currency,
+            start_date_period__range=(start_date, end_date),
+        ).aggregate(
+            count_id=Count('id'),
+            gts=Sum('base_amount') / 100,
+            gtf=Sum('total_taxable_amount') / 100,
+        )
+
+        rendered = render_to_string(
+            'generation_template.html',
+            {
+                'period': start_date.strftime(DATE_FORMAT_REPORT)+' - ' +end_date.strftime(DATE_FORMAT_REPORT),
+                'country': self.declarable_tax_receipt_countries,
+                'count_id': report_data['count_id'],
+                'gts': report_data['gts'],
+                'gtf': report_data['gtf'],
+            }
+        )
+        # print(rendered)
+        # mail = MyEmailInstance()
+        # mail.send_email(renderd)

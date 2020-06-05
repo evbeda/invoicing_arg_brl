@@ -10,8 +10,13 @@ from django.db import connection
 
 from decimal import Decimal
 
+from invoicing_app.slack_module import SlackConnection
+from invoicing_app.mail_report_module import GenerationProccessMailReport
+
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 NAME_LOGGING = 'generate_tax_receipts'
+SLACK_TOKEN = ''
+SLACK_CHANNEL = '#invoicing_arg_brl'
 
 class TaxReceiptGenerator():
 
@@ -22,6 +27,8 @@ class TaxReceiptGenerator():
         self.conditional_mask = ''
         self.cont_tax_receipts = 0
         self.error_cont = 0
+        self.slack_notification = SlackConnection(SLACK_TOKEN)
+        self.mail_report = GenerationProccessMailReport()
         logger = logging.getLogger(NAME_LOGGING)
         logger.setLevel(logging.DEBUG)
         ch = logging.StreamHandler()
@@ -93,6 +100,16 @@ class TaxReceiptGenerator():
             'status_query': 100,
         }
 
+        if not self.dry_run:
+            self.slack_notification.post_message(
+                SLACK_CHANNEL,
+                '''
+                    The generation script has started.
+                    - Country: {country}
+                    - Start date: {start}
+                    - End date: {end}
+                '''.format(country=request.country, start=request.period_start, end=request.period_end)
+            )
         self.logger.info("Starting generate tax receipts")
         self.logger.info("Start date: {}".format(request.period_start))
         self.logger.info("End date: {}".format(request.period_end))
@@ -102,6 +119,20 @@ class TaxReceiptGenerator():
         self.logger.info("Errors: {}".format(self.error_cont))
         self.logger.info("End Generation new tax receipts")
         self.logger.info("Ending generate tax receipts")
+        if not self.dry_run:
+            self.slack_notification.post_message(
+                SLACK_CHANNEL,
+                '''
+                    The generation script has finished.
+                    - Tax receipts generated: {generated}
+                    - Errors: {errors}
+                '''.format(generated=self.cont_tax_receipts, errors=self.error_cont)
+            )
+            self.mail_report.generation_send_email_report(
+                request.country,
+                request.period_start,
+                request.period_end
+            )
 
     def localize_date(self, country_code, date):
         if not self.dry_run:
