@@ -16,6 +16,7 @@ omit =
     invoicing_app/tests/factories/tax_receipts.py
     invoicing_app/slack_module.py
     invoicing_app/mail_report_module.py
+    invoicing_app/prod
     invoicing/*
     manage.py
 
