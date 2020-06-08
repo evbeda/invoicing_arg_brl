@@ -405,7 +405,6 @@ class TaxReceiptGeneratorRequest(object):
         if self.today_date:
             try:
                 self.today = dt.strptime(self.today_date, '%Y-%m-%d')
-                self.period_end = dt(self.today.year, self.today.month, self.today.day)
             except Exception:
                 raise IncorrectFormatDateException()
         else:

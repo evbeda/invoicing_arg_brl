@@ -1027,9 +1027,7 @@ class TestTaxReceiptGeneratorRequest(TestCase):
     def test_validate_today_date(self, patch_post):
         my_request = TaxReceiptGeneratorRequest(country='AR', today_date='2020-05-11', user_id=None, event_id=None)
         expected_today = dt(2020, 5, 11, 0, 0)
-        expected_end_date = dt(2020, 5, 11, 0, 0)
         self.assertEqual(my_request.today, expected_today)
-        self.assertEqual(my_request.period_end, expected_end_date)
 
     @patch.object(
         TaxReceiptGeneratorRequest, '_post_validate'
