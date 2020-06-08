@@ -1,6 +1,6 @@
 import logging
 
-from path_slack import SlackConnection
+from common.utils.slack import SlackConnection
 from path_mail import GenerationProccessMailReport
 
 from ebgeo.timezone import tzinfo
@@ -107,13 +107,14 @@ class TaxReceiptGenerator():
 
         if not self.dry_run:
             self.slack_notification.post_message(
-                SLACK_CHANNEL,
-                '''
+                channel=SLACK_CHANNEL,
+                text='''
                     The generation script has started.
                     - Country: {country}
                     - Start date: {start}
                     - End date: {end}
-                '''.format(country=request.country, start=request.period_start, end=request.period_end)
+                '''.format(country=request.country, start=request.period_start, end=request.period_end),
+                username='tax_receipt_generator'
             )
         self.logger.info("Starting generate tax receipts")
         self.logger.info("Start date: {}".format(request.period_start))
@@ -126,12 +127,13 @@ class TaxReceiptGenerator():
         self.logger.info("Ending generate tax receipts")
         if not self.dry_run:
             self.slack_notification.post_message(
-                SLACK_CHANNEL,
-                '''
+                channel=SLACK_CHANNEL,
+                text='''
                     The generation script has finished.
                     - Tax receipts generated: {generated}
                     - Errors: {errors}
-                '''.format(generated=self.cont_tax_receipts, errors=self.error_cont)
+                '''.format(generated=self.cont_tax_receipts, errors=self.error_cont),
+                username='tax_receipt_generator'
             )
             self.mail_report.generation_send_email_report(
                 request.country,

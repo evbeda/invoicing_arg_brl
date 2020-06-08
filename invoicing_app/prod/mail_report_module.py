@@ -12,6 +12,7 @@ from django.template.loader import render_to_string
 from mail_path import EmailConnection
 
 DATE_FORMAT_REPORT = '%Y-%m-%d %H:%M:%S'
+BILLING_NAME_DB = 'billing'
 
 class GenerationProccessMailReport():
 
@@ -19,7 +20,7 @@ class GenerationProccessMailReport():
         start_date = period_start - relativedelta(days=1)
         end_date = period_end - relativedelta(seconds=1)
 
-        report_data = TaxReceipt.objects.filter(
+        report_data = TaxReceipt.objects.using(BILLING_NAME_DB).filter(
             reporting_country_code=country,
             start_date_period__range=(start_date, end_date),
         ).aggregate(
@@ -47,7 +48,7 @@ class DeclarationProccessMailReport():
         start_date = start_date_period - relativedelta(days=1)
         end_date = end_date_period - relativedelta(seconds=1)
 
-        report_data = TaxReceipt.objects.filter(
+        report_data = TaxReceipt.objects.using(BILLING_NAME_DB).filter(
             currency=currency,
             start_date_period__range=(start_date, end_date),
             status_id=3,
