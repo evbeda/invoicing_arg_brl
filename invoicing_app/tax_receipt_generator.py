@@ -427,18 +427,22 @@ class TaxReceiptGeneratorRequest(object):
 class CountryNotConfiguredException(Exception):
     def __init__(self):
         self.message = 'The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)'
+        super(CountryNotConfiguredException, self).__init__(self.message)
 
 
 class UserAndEventProvidedException(Exception):
     def __init__(self):
         self.message = 'Can not use event and user options in the same time'
+        super(UserAndEventProvidedException, self).__init__(self.message)
 
 
 class NoCountryProvidedException(Exception):
     def __init__(self):
         self.message = 'No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)'
+        super(NoCountryProvidedException, self).__init__(self.message)
 
 
 class IncorrectFormatDateException(Exception):
     def __init__(self):
         self.message = 'Date is not matching format YYYY-MM-DD'
+        super(IncorrectFormatDateException, self).__init__(self.message)
