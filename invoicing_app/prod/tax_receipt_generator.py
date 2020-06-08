@@ -1,232 +1,145 @@
-from optparse import make_option
 import logging
 
-from decimal import Decimal
+from common.utils.slack import SlackConnection
+from path_mail import GenerationProccessMailReport
 
+from ebgeo.timezone import tzinfo
 import pytz
-
 from datetime import datetime as dt
 from dateutil.relativedelta import relativedelta
 
-from django.conf import settings
-from common.management.base import BaseCommand
-from django.core.management.base import CommandError
-from service import control
-from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
-from permissions.noninteractive import get_noninteractive_token
-from ebapps import payments as payment_service_constants
-from ebgeo.timezone import tzinfo
-
 from django.db import connections
 
-from common.utils.slack import SlackConnection
+from decimal import Decimal
 
+from django.conf import settings
+
+from permissions.constants import PERMISSION_USER_PAYMENTS_USER_INSTRUMENTS
+from permissions.noninteractive import get_noninteractive_token
+from service import control
+
+from ebapps import payments as payment_service_constants
+
+SLACK_TOKEN = ''
+SLACK_CHANNEL = ''
+DB_NAME = 'slave'
 DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
 
+class TaxReceiptGenerator():
 
-class Command(BaseCommand):
-    """
-        This script generate tax_receitps for a month. It's used in Argentina and Brazil.
-        It was developed by EDA!
-
-        for event:
-        djmanage generate_tax_receipts --event=18388067 --settings=settings.configuration
-
-        for user:
-        djmanage generate_tax_receipts --user=150335768 --settings=settings.configuration
-
-        use --logging to enable logger in console
-
-        use --dry_run to test the command but don't update any DB or call any service
-
-        use --country to process an specific country (required)
-
-        use --date to run the proccess for a specific date
-
-    """
-    help = ('Generate end of month tax receipts')
-
-    option_list = BaseCommand.option_list + (
-        make_option(
-            '--date',
-            dest='today_date',
-            type='string',
-            help='Force a specific date: YYYY-MM-DD format',
-        ),
-        make_option(
-            '--event',
-            dest='event_id',
-            type='int',
-            help='Enter a event ID',
-        ),
-        make_option(
-            '--user',
-            dest='user_id',
-            type='int',
-            help='Enter a user ID',
-        ),
-        make_option(
-            '--dry_run',
-            action="store_true",
-            dest='dry_run',
-            default=False,
-            help='If set, nothing will be written to DB tables.',
-        ),
-        make_option(
-            '--logging',
-            action="store_true",
-            dest="logging",
-            default=False,
-            help='Enable logger in console',
-        ),
-        make_option(
-            '--country',
-            dest="country",
-            default=False,
-            help='specific country to process (like AR or BR)',
-        ),
-    )
-
-    def __init__(self, *args, **kwargs):
+    def __init__(self, dry_run, do_logging):
+        self.dry_run = dry_run
+        self.do_logging = do_logging
         self.logger = logging.getLogger('financial_transactions')
-        self.event_id = None
-        self.user_id = None
         self.sentry = logging.getLogger('sentry')
         self.conditional_mask = ''
+        self.cont_tax_receipts = 0
+        self.error_cont = 0
+        self.slack_notification = SlackConnection(SLACK_TOKEN)
+        self.mail_report = GenerationProccessMailReport()
         self.query = '''
-                    SELECT
-                        `Orders`.`event` as `event_id`,
-                        `Events`.`uid` as `user_id`,
-                        `Events`.`event_parent` as `event_parent`,
-                        `Events`.`currency` as `currency`,
-                        `Payment_Options`.`epp_country` as `epp_country`,
-                        `Payment_Options`.`epp_name_on_account` as `epp_name_on_account`,
-                        `Payment_Options`.`epp_address1` as `epp_address1`,
-                        `Payment_Options`.`epp_address2` as `epp_address2`,
-                        `Payment_Options`.`epp_zip` as `epp_zip`,
-                        `Payment_Options`.`epp_city` as `epp_city`,
-                        `Payment_Options`.`epp_state` as `epp_state`,
-                        `Payment_Options`.`epp_tax_identifier` as `epp_tax_identifier`,
-                        COUNT(`Orders`.`event`) AS `payment_transactions_count`,
-                        SUM(`Orders`.`eb_tax`) AS `total_tax_amount`,
-                        SUM(`Orders`.`mg_fee`) AS `total_taxable_amount_with_tax_amount`,
-                        SUM(`Orders`.`gross`) AS `base_amount`
-                    FROM `Orders`
-                        INNER JOIN `Events` ON (`Orders`.`event` = `Events`.`id` )
-                        INNER JOIN `Payment_Options` ON {parent_child_mask}
-                    WHERE (
-                        `Orders`.`status` = %(status_query)s AND
-                        `Orders`.`pp_date` <= %(localize_end_date_query)s AND
-                        `Orders`.`changed` >= %(localize_start_date_query)s AND
-                        `Orders`.`mg_fee` > '0.00' AND
-                        `Orders`.`changed` <= %(localize_end_date_query)s AND
-                        `Orders`.`pp_date` >= %(localize_start_date_query)s AND
-                        `Payment_Options`.`accept_eventbrite` = 1 AND
-                        `Payment_Options`.`epp_country` = %(declarable_tax_receipt_countries_query)s
-                        {condition_mask}
-                    )
-                    GROUP BY
-                        `event_id`
-                    ORDER BY NULL
-                '''
-        super(Command, self).__init__(*args, **kwargs)
-
-    def handle(self, **options):
-        self.dry_run = options['dry_run']
-
-        if options['country']:
-            if options['country'] not in settings.EVENTBRITE_TAX_INFORMATION:
-                raise CommandError(
-                    'The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)'
-                )
-            self.declarable_tax_receipt_countries = str(options['country'])
-        else:
-            raise CommandError(
-                'No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)'
+            SELECT
+                `Orders`.`event` as `event_id`,
+                `Events`.`uid` as `user_id`,
+                `Events`.`event_parent` as `event_parent`,
+                `Events`.`currency` as `currency`,
+                `Payment_Options`.`epp_country` as `epp_country`,
+                `Payment_Options`.`epp_name_on_account` as `epp_name_on_account`,
+                `Payment_Options`.`epp_address1` as `epp_address1`,
+                `Payment_Options`.`epp_address2` as `epp_address2`,
+                `Payment_Options`.`epp_zip` as `epp_zip`,
+                `Payment_Options`.`epp_city` as `epp_city`,
+                `Payment_Options`.`epp_state` as `epp_state`,
+                `Payment_Options`.`epp_tax_identifier` as `epp_tax_identifier`,
+                COUNT(`Orders`.`event`) AS `payment_transactions_count`,
+                SUM(`Orders`.`eb_tax`) AS `total_tax_amount`,
+                SUM(`Orders`.`mg_fee`) AS `total_taxable_amount_with_tax_amount`,
+                SUM(`Orders`.`gross`) AS `base_amount`
+            FROM `Orders`
+                INNER JOIN `Events` ON (`Orders`.`event` = `Events`.`id` )
+                INNER JOIN `Payment_Options` ON {parent_child_mask}
+            WHERE (
+                `Orders`.`status` = %(status_query)s AND
+                `Orders`.`pp_date` <= %(localize_end_date_query)s AND
+                `Orders`.`changed` >= %(localize_start_date_query)s AND
+                `Orders`.`mg_fee` > '0.00' AND
+                `Orders`.`changed` <= %(localize_end_date_query)s AND
+                `Orders`.`pp_date` >= %(localize_start_date_query)s AND
+                `Payment_Options`.`accept_eventbrite` = 1 AND
+                `Payment_Options`.`epp_country` = %(declarable_tax_receipt_countries_query)s
+                {condition_mask}
             )
+            GROUP BY
+                `event_id`
+            ORDER BY NULL
+        '''
 
-        if options['user_id'] and options['event_id']:
-            raise CommandError('Can not use both options in the same time')
-
-        if options['today_date']:
-            try:
-                today = dt.strptime(options['today_date'], '%Y-%m-%d')
-                self.period_end = dt(today.year, today.month, today.day)
-            except Exception:
-                raise CommandError("Date is not matching format YYYY-MM-DD")
-        else:
-            today = dt.today()
-
-        curr_month = dt(today.year, today.month, 1)
-        prev_month = curr_month - relativedelta(months=1)
-        self.period_start = prev_month
-        self.period_end = curr_month
-
-        if options['logging']:
+    def run(self, request):
+        """
+            Run method executes all the business logic. The request attribute is an instance
+            of the TaxReceiptGeneratorRequest class
+        """
+        if self.do_logging:
             self.enable_logging()
 
-        if options['event_id']:
-            self.event_id = options['event_id']
-            self.conditional_mask = 'AND `Events`.`id` = {}'.format(self.event_id)
-
-        if options['user_id']:
-            self.user_id = options['user_id']
-            self.conditional_mask = 'AND `Events`.`uid` = {}'.format(self.user_id)
+        if request.event_id:
+            event_id = request.event_id
+            self.conditional_mask = 'AND `Events`.`id` = {}'.format(event_id)
+        elif request.user_id:
+            user_id = request.user_id
+            self.conditional_mask = 'AND `Events`.`uid` = {}'.format(user_id)
 
         localize_start_date = self.localize_date(
-            self.declarable_tax_receipt_countries,
-            self.period_start
+            request.country,
+            request.period_start
         )
         localize_end_date = self.localize_date(
-            self.declarable_tax_receipt_countries,
-            self.period_end
+            request.country,
+            request.period_end
         )
 
         query_options = {
             'localize_end_date_query': localize_end_date,
             'localize_start_date_query': localize_start_date,
-            'declarable_tax_receipt_countries_query': self.declarable_tax_receipt_countries,
+            'declarable_tax_receipt_countries_query': request.country,
             'status_query': 100,
         }
-        self._send_slack_notification_message(
-            """
-            The generation script started to run:
-            Country: {}
-            Start date: {}
-            End date: {}
-            """.format(
-                self.declarable_tax_receipt_countries,
-                localize_start_date,
-                localize_end_date
+
+        if not self.dry_run:
+            self.slack_notification.post_message(
+                channel=SLACK_CHANNEL,
+                text='''
+                    The generation script has started.
+                    - Country: {country}
+                    - Start date: {start}
+                    - End date: {end}
+                '''.format(country=request.country, start=request.period_start, end=request.period_end),
+                username='tax_receipt_generator'
             )
-        )
-        self.logger.info("------Starting generate tax receipts------")
-        self.logger.info("start: {}".format(self.period_start))
-        self.logger.info("end: {}".format(self.period_end))
+        self.logger.info("Starting generate tax receipts")
+        self.logger.info("Start date: {}".format(request.period_start))
+        self.logger.info("End date: {}".format(request.period_end))
         self.get_and_iterate_no_series_events(query_options)
         self.get_and_iterate_child_events(query_options)
-        self.logger.info("------End Generation new tax receipts------")
-        self.logger.info("------Ending generate tax receipts------")
-        self._send_slack_notification_message('The generation script ran successfully')
-
-    def _log_exception(self, e, event_id=None, quiet=False):
-        message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format(
-            event_id,
-            e.message,
-            self.dry_run
-        )
-        if not quiet:
-            self.sentry.error(
-                'Error in generate_tax_receipts',
-                extra={
-                    'view': 'generate_tax_receipts',
-                    'data': {
-                        'exception': e,
-                        'event': event_id,
-                    },
-                },
+        self.logger.info("Tax receipts generated: {}".format(self.cont_tax_receipts))
+        self.logger.info("Errors: {}".format(self.error_cont))
+        self.logger.info("End Generation new tax receipts")
+        self.logger.info("Ending generate tax receipts")
+        if not self.dry_run:
+            self.slack_notification.post_message(
+                channel=SLACK_CHANNEL,
+                text='''
+                    The generation script has finished.
+                    - Tax receipts generated: {generated}
+                    - Errors: {errors}
+                '''.format(generated=self.cont_tax_receipts, errors=self.error_cont),
+                username='tax_receipt_generator'
             )
-            self.logger.error(message)
+            self.mail_report.generation_send_email_report(
+                request.country,
+                request.period_start,
+                request.period_end
+            )
 
     def localize_date(self, country_code, date):
         event_timezone = pytz.country_timezones(country_code)[0]
@@ -260,7 +173,7 @@ class Command(BaseCommand):
     def get_query_results(self, query_options, query):
         query_results = []
 
-        with connections['slave'].cursor() as cursor:
+        with connections[DB_NAME].cursor() as cursor:
             cursor.execute(
                 query,
                 query_options
@@ -274,6 +187,7 @@ class Command(BaseCommand):
                     if not data.get(row[0], False):
                         data[columns[index]] = row[index]
                 query_results.append(data)
+
             return query_results
 
     def iterate_querys_results(self, query_results, localize_start_date, localize_end_date):
@@ -304,22 +218,19 @@ class Command(BaseCommand):
             }
 
             if result['payment_transactions_count'] > 0:
-                # EB-28811: some eb_tax in DB has Null
                 if result['total_tax_amount'] is None:
                     result['total_tax_amount'] = Decimal('0.00')
 
                 self.logger.info(
-                    ('Processing event: %i total_taxable_amount_with_tax_amount: %s ' +
-                     'base_amount: %s total_tax_amount: %s ' +
-                     'payment_transactions_count: %i dry_run: %s') % (
-                        result['event_id'],
-                        str(tax_receipt_orders['total_taxable_amount_with_tax_amount']),
-                        str(tax_receipt_orders['base_amount']),
-                        str(tax_receipt_orders['total_tax_amount']),
-                        tax_receipt_orders['payment_transactions_count'],
-                        self.dry_run,
+                    "Processing event: {event} total_taxable_amount_with_tax_amount: {ttawta} base_amount: {base_amount} total_tax_amount: {total_tax_amount} payment_transactions_count: {payment_trans_count}".format(
+                        event=result['event_id'],
+                        ttawta=str(tax_receipt_orders['total_taxable_amount_with_tax_amount']),
+                        base_amount=str(tax_receipt_orders['base_amount']),
+                        total_tax_amount=str(tax_receipt_orders['total_tax_amount']),
+                        payment_trans_count=tax_receipt_orders['payment_transactions_count']
                     )
                 )
+
                 try:
                     self.generate_tax_receipts(
                         payment_option,
@@ -342,9 +253,9 @@ class Command(BaseCommand):
         EB_TAX_INFO = settings.EVENTBRITE_TAX_INFORMATION[payment_option['epp_country']]
         if not EB_TAX_INFO:
             raise Exception('Cannot find EVENTBRITE_TAX_INFORMATION in settings')
+
         total_taxable_amount = (
-            tax_receipt_orders['total_taxable_amount_with_tax_amount'] -
-            tax_receipt_orders['total_tax_amount']
+            tax_receipt_orders['total_taxable_amount_with_tax_amount'] - tax_receipt_orders['total_tax_amount']
         )
         orders_kwargs = {
             'tax_receipt': {
@@ -426,17 +337,12 @@ class Command(BaseCommand):
                         response,
                     )
                 )
+                self.cont_tax_receipts = self.cont_tax_receipts + 1
         else:
-            pass
+            self.call_service_dry_run()
 
-    def enable_logging(self):
-        console = logging.StreamHandler()
-        console.setLevel(logging.INFO)
-        formatter = logging.Formatter(
-            '%(name)-12s: %(levelname)-8s %(message)s'
-        )
-        console.setFormatter(formatter)
-        self.logger.addHandler(console)
+    def call_service_dry_run(self):
+        self.cont_tax_receipts = self.cont_tax_receipts + 1
 
     def get_epp_tax_identifier_type(self, epp_country, epp_tax_identifier):
         if not self.dry_run:
@@ -454,7 +360,85 @@ class Command(BaseCommand):
 
         return ''
 
-    def _send_slack_notification_message(self, message):
-        slack = SlackConnection(token=settings.SLACK_ADMINAPP_TOKEN)
-        channel = '#eda_invoicing_ar_br'
-        slack.post_message(channel, message)
+    def enable_logging(self):
+        console = logging.StreamHandler()
+        console.setLevel(logging.INFO)
+        formatter = logging.Formatter(
+            '%(name)-12s: %(levelname)-8s %(message)s'
+        )
+        console.setFormatter(formatter)
+        self.logger.addHandler(console)
+
+    def _log_exception(self, e, event_id=None, quiet=False):
+        message = 'Error in generate_tax_receipts, event: {} , details: {}, dry_run: {} '.format(
+            event_id,
+            e.message,
+            self.dry_run
+        )
+        self.logger.error(message)
+        self.error_cont = self.error_cont + 1
+
+
+class TaxReceiptGeneratorRequest(object):
+
+    def __init__(self, country, today_date, user_id, event_id):
+        self.country = country
+        self.today_date = today_date
+        self.user_id = user_id
+        self.event_id = event_id
+        self._validate()
+        self._post_validate()
+
+    def _validate(self):
+        """
+            Check if the params passed to the tax_receipt_generator are ok.
+        """
+        if self.country:
+            if self.country not in settings.EVENTBRITE_TAX_INFORMATION:
+                raise CountryNotConfiguredException()
+        else:
+            raise NoCountryProvidedException()
+
+        if self.user_id and self.event_id:
+            raise UserAndEventProvidedException()
+
+        if self.today_date:
+            try:
+                self.today = dt.strptime(self.today_date, '%Y-%m-%d')
+            except Exception:
+                raise IncorrectFormatDateException()
+        else:
+            self.today = dt.today()
+
+    def _post_validate(self):
+        """
+            Set the fields after validation
+        """
+        curr_month = dt(self.today.year, self.today.month, 1)
+        prev_month = curr_month - relativedelta(months=1)
+        self.period_start = prev_month
+        self.period_end = curr_month
+
+
+class CountryNotConfiguredException(Exception):
+    def __init__(self):
+        self.message = 'The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)'
+        super(CountryNotConfiguredException, self).__init__(self.message)
+
+
+class UserAndEventProvidedException(Exception):
+    def __init__(self):
+        self.message = 'Can not use event and user options in the same time'
+        super(UserAndEventProvidedException, self).__init__(self.message)
+
+
+class NoCountryProvidedException(Exception):
+    def __init__(self):
+        self.message = 'No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)'
+        super(NoCountryProvidedException, self).__init__(self.message)
+
+
+class IncorrectFormatDateException(Exception):
+    def __init__(self):
+        self.message = 'Date is not matching format YYYY-MM-DD'
+        super(IncorrectFormatDateException, self).__init__(self.message)

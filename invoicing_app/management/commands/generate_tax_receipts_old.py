@@ -91,6 +91,7 @@ class Command(BaseCommand):
         self.event_id = None
         self.user_id = None
         self.sentry = logging.getLogger('sentry')
+        self.output_dict = {}
 
         super(Command, self).__init__(*args, **kwargs)
 
@@ -333,4 +334,4 @@ class Command(BaseCommand):
             self.call_service(orders_kwargs)
 
     def call_service(self, orders_kwargs):
-        pass
+        self.output_dict.update({orders_kwargs['tax_receipt']['event_id']: orders_kwargs})

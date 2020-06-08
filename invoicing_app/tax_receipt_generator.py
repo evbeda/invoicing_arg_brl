@@ -27,6 +27,7 @@ class TaxReceiptGenerator():
         self.conditional_mask = ''
         self.cont_tax_receipts = 0
         self.error_cont = 0
+        self.output_dict = {}
         self.slack_notification = SlackConnection(SLACK_TOKEN)
         self.mail_report = GenerationProccessMailReport()
         logger = logging.getLogger(NAME_LOGGING)
@@ -362,6 +363,7 @@ class TaxReceiptGenerator():
 
     def call_service(self, orders_kwargs):
         self.cont_tax_receipts = self.cont_tax_receipts + 1
+        self.output_dict.update({orders_kwargs['tax_receipt']['event_id']: orders_kwargs})
 
     def enable_logging(self):
         console = logging.StreamHandler()
@@ -408,7 +410,6 @@ class TaxReceiptGeneratorRequest(object):
         if self.today_date:
             try:
                 self.today = dt.strptime(self.today_date, '%Y-%m-%d')
-                self.period_end = dt(self.today.year, self.today.month, self.today.day)
             except Exception:
                 raise IncorrectFormatDateException()
         else:
@@ -427,18 +428,22 @@ class TaxReceiptGeneratorRequest(object):
 class CountryNotConfiguredException(Exception):
     def __init__(self):
         self.message = 'The country provided is not configured (settings.EVENTBRITE_TAX_INFORMATION)'
+        super(CountryNotConfiguredException, self).__init__(self.message)
 
 
 class UserAndEventProvidedException(Exception):
     def __init__(self):
         self.message = 'Can not use event and user options in the same time'
+        super(UserAndEventProvidedException, self).__init__(self.message)
 
 
 class NoCountryProvidedException(Exception):
     def __init__(self):
         self.message = 'No country provided. It provides: command --country="EX" (AR-Argentina or BR-Brazil)'
+        super(NoCountryProvidedException, self).__init__(self.message)
 
 
 class IncorrectFormatDateException(Exception):
     def __init__(self):
         self.message = 'Date is not matching format YYYY-MM-DD'
+        super(IncorrectFormatDateException, self).__init__(self.message)
