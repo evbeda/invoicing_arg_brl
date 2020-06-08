@@ -114,6 +114,7 @@ class Command(BaseCommand):
         self.sentry = logging.getLogger('sentry')
         self.error_cont = 0
         self.conditional_mask = ''
+        self.output_dict = {}
         self.query = '''
                     SELECT
                         `Orders`.`event` as `event_id`,
@@ -478,7 +479,7 @@ class Command(BaseCommand):
         self.logger.addHandler(console)
 
     def call_service(self, orders_kwargs):
-        pass
+        self.output_dict.update({orders_kwargs['tax_receipt']['event_id']: orders_kwargs})
 
     def get_epp_tax_identifier_type(self, epp_country, epp_tax_identifier):
         if not self.dry_run:

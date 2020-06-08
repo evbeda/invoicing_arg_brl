@@ -27,6 +27,7 @@ class TaxReceiptGenerator():
         self.conditional_mask = ''
         self.cont_tax_receipts = 0
         self.error_cont = 0
+        self.output_dict = {}
         self.slack_notification = SlackConnection(SLACK_TOKEN)
         self.mail_report = GenerationProccessMailReport()
         logger = logging.getLogger(NAME_LOGGING)
@@ -362,6 +363,7 @@ class TaxReceiptGenerator():
 
     def call_service(self, orders_kwargs):
         self.cont_tax_receipts = self.cont_tax_receipts + 1
+        self.output_dict.update({orders_kwargs['tax_receipt']['event_id']: orders_kwargs})
 
     def enable_logging(self):
         console = logging.StreamHandler()
